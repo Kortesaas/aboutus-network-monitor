@@ -2,11 +2,12 @@
 
 Read-only local production-network dashboard for the ABOUTUS show network.
 
-## Current v0.4 scope
+## Current v0.5 scope
 
 - FastAPI backend with a static browser dashboard.
 - Editable network configuration in `config/network.yaml`.
-- Modern dark-default dashboard with Overview, Devices, Topology, and Settings views.
+- Modern dark-default dashboard with a top-navigation web app layout.
+- Overview, Devices, Topology, and Settings views with responsive spacing and reduced visual noise.
 - Persisted UI state for active page, device filters, VLAN collapse state, expanded device details, and dashboard settings.
 - Live status checks for:
   - LANCOM router
@@ -15,7 +16,7 @@ Read-only local production-network dashboard for the ABOUTUS show network.
   - Internet probes
   - VLAN gateways
 - Manual inventory loaded from config and merged with safe subnet discovery.
-- Devices grouped by VLAN with search, VLAN/status/source/type filters, and expandable details.
+- Devices grouped by VLAN with search, VLAN/status/source/type filters, explicit expand icons, and expandable details.
 - Compact Overview topology plus full Topology view for Internet, router, switches, VLAN lanes, and warning state.
 - Open-web-interface actions for infrastructure and devices with IP addresses.
 - Switch/port details display `Unknown` unless explicitly present in inventory or proven by a future collector.
@@ -61,12 +62,14 @@ http://192.168.99.10:8080
 
 ## UI
 
-The v0.4 frontend is a lightweight static app with no external CDN dependencies. It keeps all data from the backend available, but uses progressive disclosure:
+The v0.5 frontend is a lightweight static app with no external CDN dependencies. It keeps all data from the backend available, but uses progressive disclosure:
 
 - Overview shows show-ready state, critical cards, warnings, compact network path, and compact VLAN cards.
-- Devices provides search, filters, grouped VLAN sections, and expandable device details.
+- Devices provides search, filters, grouped VLAN sections, and expandable device details with visible chevron affordances.
 - Topology shows the main Internet/router/switch path plus VLAN lanes.
 - Settings stores dashboard preferences in browser `localStorage`.
+
+The UI uses fixed grid tracks, wrapping controls, and compact action buttons so labels, status pills, and web-interface buttons do not overlap on desktop or tablet-sized screens.
 
 The browser also stores the active page, device filters, collapsed VLAN groups, and expanded device details in `localStorage`, so automatic refreshes do not reset the working view.
 
@@ -88,7 +91,7 @@ inventory:
 
 If `web_url` is not configured but an IP address is known, the API exposes a generated default of `http://<ip>`. The UI opens these links in a new browser tab and does not assume HTTPS unless it is configured.
 
-The current `infrastructure` list remains supported. v0.4 also accepts a future object-style shape with multiple stage switches:
+The current `infrastructure` list remains supported. v0.5 also accepts a future object-style shape with multiple stage switches:
 
 ```yaml
 infrastructure:
@@ -119,7 +122,7 @@ export ABOUTUS_MONITOR_CONFIG=/path/to/network.yaml
 
 ## Discovery
 
-v0.4 can run a read-only `nmap -sn` ping sweep across all configured VLAN subnets. The collector:
+v0.5 can run a read-only `nmap -sn` ping sweep across all configured VLAN subnets. The collector:
 
 - uses no port scanning;
 - scans only subnets listed in `config/network.yaml`;

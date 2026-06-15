@@ -8,16 +8,12 @@
   </head>
   <body>
     <div class="app-shell">
-      <aside class="sidebar" aria-label="Primary navigation">
-        <div class="brand">
+      <header class="site-header">
+        <div class="brand" aria-label="ABOUTUS Network Monitor">
           <div class="brand-mark" aria-hidden="true">A</div>
-          <div>
-            <p class="eyebrow">ABOUTUS</p>
-            <h1>Network Monitor</h1>
-          </div>
         </div>
 
-        <nav class="nav-list">
+        <nav class="nav-list" aria-label="Primary navigation">
           <button class="nav-item active" type="button" data-route="overview">
             <span class="nav-icon" data-icon="dashboard"></span>
             <span>Overview</span>
@@ -36,32 +32,34 @@
           </button>
         </nav>
 
-        <div class="sidebar-footer">
-          <span id="stationBadge" class="soft-badge">Loading</span>
+        <div class="header-actions">
+          <button id="settingsButton" class="icon-button" type="button" aria-label="Open settings" title="Open settings">
+            <span data-icon="settings"></span>
+          </button>
+          <button id="refreshButton" class="primary-button" type="button">
+            <span data-icon="refresh"></span>
+            <span>Refresh</span>
+          </button>
         </div>
-      </aside>
+      </header>
 
-      <div class="main-shell">
-        <header class="topbar">
-          <div>
-            <p id="pageKicker" class="eyebrow">Overview</p>
-            <h2 id="pageTitle">Live Production Network</h2>
-            <p id="pageSubtitle" class="muted">Waiting for first status snapshot</p>
-          </div>
-          <div class="toolbar">
-            <span id="lastUpdated" class="timestamp">Not updated yet</span>
-            <button id="settingsButton" class="icon-button" type="button" aria-label="Open settings" title="Open settings">
-              <span data-icon="settings"></span>
-            </button>
-            <button id="refreshButton" class="primary-button" type="button">
-              <span data-icon="refresh"></span>
-              <span>Refresh</span>
-            </button>
-          </div>
-        </header>
+      <section class="page-heading">
+        <h2 id="pageTitle">Overview</h2>
+        <div class="status-bar" aria-label="Dashboard status">
+          <span class="status-chip">
+            <span data-icon="clock"></span>
+            <span id="systemClock">--:--:--</span>
+          </span>
+          <span class="status-chip refresh-chip">
+            <span data-icon="timer"></span>
+            <span id="refreshCountdown">--s</span>
+            <span id="refreshProgress" class="refresh-progress" aria-hidden="true"></span>
+          </span>
+          <span id="lastUpdated" class="status-chip timestamp">Not updated yet</span>
+        </div>
+      </section>
 
-        <main id="pageContent" class="content" tabindex="-1"></main>
-      </div>
+      <main id="pageContent" class="content" tabindex="-1"></main>
     </div>
 
     <script src="/static/app.js" defer></script>

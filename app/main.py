@@ -14,7 +14,7 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 app = FastAPI(
     title="ABOUTUS Network Monitor",
-    version="0.4.0",
+    version="0.5.0",
     docs_url="/api/docs",
     redoc_url=None,
 )

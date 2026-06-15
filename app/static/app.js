@@ -1,4 +1,4 @@
-const APP_VERSION = "0.4.0";
+const APP_VERSION = "0.5.0";
 const SETTINGS_KEY = "aboutus-network-monitor-ui-settings-v3";
 const COLLAPSE_KEY = "aboutus-network-monitor-collapsed-vlans-v3";
 const OPEN_DEVICES_KEY = "aboutus-network-monitor-open-devices-v4";
@@ -15,35 +15,27 @@ const DEFAULT_SETTINGS = {
 
 const PAGE_META = {
   overview: {
-    kicker: "Overview",
-    title: "Live Production Network",
-    subtitle: "Show-ready status, critical checks, VLAN health, and active warnings.",
+    title: "Overview",
   },
   devices: {
-    kicker: "Devices",
-    title: "Known and Discovered Devices",
-    subtitle: "Grouped by VLAN with search, filters, and expandable technical details.",
+    title: "Devices",
   },
   topology: {
-    kicker: "Topology",
-    title: "Network Path",
-    subtitle: "Clean view of the WAN, router, switches, and VLAN lanes.",
+    title: "Topology",
   },
   settings: {
-    kicker: "Settings",
-    title: "Dashboard Preferences",
-    subtitle: "Theme, refresh rate, compact mode, and discovery display controls.",
+    title: "Settings",
   },
 };
 
 const elements = {
   navItems: Array.from(document.querySelectorAll(".nav-item")),
   navIcons: Array.from(document.querySelectorAll("[data-icon]")),
-  pageKicker: document.querySelector("#pageKicker"),
   pageTitle: document.querySelector("#pageTitle"),
-  pageSubtitle: document.querySelector("#pageSubtitle"),
   pageContent: document.querySelector("#pageContent"),
-  stationBadge: document.querySelector("#stationBadge"),
+  systemClock: document.querySelector("#systemClock"),
+  refreshCountdown: document.querySelector("#refreshCountdown"),
+  refreshProgress: document.querySelector("#refreshProgress"),
   lastUpdated: document.querySelector("#lastUpdated"),
   refreshButton: document.querySelector("#refreshButton"),
   settingsButton: document.querySelector("#settingsButton"),
@@ -55,6 +47,9 @@ const state = {
   error: null,
   loading: false,
   refreshTimer: null,
+  clockTimer: null,
+  refreshCycleStartedAt: null,
+  nextRefreshAt: null,
   settings: loadSettings(),
   collapsedVlans: loadCollapsedVlans(),
   openDevices: loadOpenDevices(),
@@ -68,6 +63,8 @@ function icon(name) {
     topology: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3h2v4h-2V3Zm0 14h2v4h-2v-4ZM5 9h14v6H5V9Zm2 2v2h10v-2H7ZM3 11H1V7h6v2H3v2Zm20 0h-2V9h-4V7h6v4Z"/></svg>',
     settings: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 13.5c.1-.5.1-1 .1-1.5s0-1-.1-1.5l2-1.5-2-3.5-2.4 1a7.5 7.5 0 0 0-2.6-1.5L14 2h-4l-.4 2.5A7.5 7.5 0 0 0 7 6L4.6 5l-2 3.5 2 1.5c-.1.5-.1 1-.1 1.5s0 1 .1 1.5l-2 1.5 2 3.5 2.4-1a7.5 7.5 0 0 0 2.6 1.5L10 22h4l.4-2.5A7.5 7.5 0 0 0 17 18l2.4 1 2-3.5-2-1.5ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z"/></svg>',
     refresh: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.7 6.3A8 8 0 1 0 20 12h-2a6 6 0 1 1-1.8-4.3L13 11h8V3l-3.3 3.3Z"/></svg>',
+    clock: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16Zm1 3h-2v6l5 3 1-1.7-4-2.3V7Z"/></svg>',
+    timer: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 2h6v2H9V2Zm2 6h2v5h-2V8Zm1-3a8 8 0 1 0 5.7 2.4L19 6l-1.4-1.4-1.4 1.3A8 8 0 0 0 12 5Zm0 2a6 6 0 1 1 0 12 6 6 0 0 1 0-12Z"/></svg>',
     external: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3h7v7h-2V6.4l-8.3 8.3-1.4-1.4L17.6 5H14V3ZM5 5h7v2H7v10h10v-5h2v7H5V5Z"/></svg>',
     arrow: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5.6 19.4 12 13 18.4 11.6 17l4-4H4v-2h11.6l-4-4L13 5.6Z"/></svg>',
     internet: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm6.9 9h-3.1a15 15 0 0 0-1.1-5 8.1 8.1 0 0 1 4.2 5ZM12 4.1c.7 1 1.4 3.3 1.7 6.9h-3.4c.3-3.6 1-5.9 1.7-6.9ZM4.3 13h3.9c.1 1.7.4 3.3.8 4.7A8.1 8.1 0 0 1 4.3 13Zm3.9-2H4.3A8.1 8.1 0 0 1 9 6.3 18 18 0 0 0 8.2 11Zm3.8 8.9c-.7-1-1.4-3.3-1.7-6.9h3.4c-.3 3.6-1 5.9-1.7 6.9Zm3-2.2c.4-1.4.7-3 .8-4.7h3.9a8.1 8.1 0 0 1-4.7 4.7Z"/></svg>',
@@ -129,6 +126,17 @@ function loadFilters() {
 
 function saveFilters() {
   localStorage.setItem(FILTERS_KEY, JSON.stringify(state.filters));
+}
+
+function filtersActive() {
+  const defaults = defaultFilters();
+  return Object.keys(defaults).some((key) => String(state.filters[key] ?? "") !== String(defaults[key]));
+}
+
+function clearFilters() {
+  state.filters = defaultFilters();
+  saveFilters();
+  render();
 }
 
 function loadOpenDevices() {
@@ -275,11 +283,53 @@ function applyDensity() {
   document.documentElement.dataset.compact = state.settings.compactMode ? "true" : "false";
 }
 
-function updateRefreshTimer() {
-  if (state.refreshTimer) {
-    window.clearInterval(state.refreshTimer);
+function refreshIntervalMs() {
+  return Math.max(1000, Number(state.settings.refreshInterval) || DEFAULT_SETTINGS.refreshInterval);
+}
+
+function formatClock(value) {
+  return value.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function updateStatusBar() {
+  const now = Date.now();
+  elements.systemClock.textContent = formatClock(new Date(now));
+
+  const interval = refreshIntervalMs();
+  const remaining = state.nextRefreshAt ? Math.max(0, state.nextRefreshAt - now) : interval;
+  const progress = state.refreshCycleStartedAt
+    ? Math.min(100, Math.max(0, ((now - state.refreshCycleStartedAt) / interval) * 100))
+    : 0;
+
+  elements.refreshCountdown.textContent = state.loading ? "Refreshing" : `Refresh ${Math.ceil(remaining / 1000)}s`;
+  elements.refreshProgress.style.setProperty("--progress", `${state.loading ? 100 : progress}%`);
+}
+
+function updateClockTimer() {
+  if (state.clockTimer) {
+    window.clearInterval(state.clockTimer);
   }
-  state.refreshTimer = window.setInterval(loadStatus, Number(state.settings.refreshInterval));
+  state.clockTimer = window.setInterval(updateStatusBar, 250);
+  updateStatusBar();
+}
+
+function scheduleNextRefresh() {
+  if (state.refreshTimer) {
+    window.clearTimeout(state.refreshTimer);
+  }
+  const interval = refreshIntervalMs();
+  state.refreshCycleStartedAt = Date.now();
+  state.nextRefreshAt = state.refreshCycleStartedAt + interval;
+  state.refreshTimer = window.setTimeout(() => loadStatus({ preserveScroll: true }), interval);
+  updateStatusBar();
+}
+
+function updateRefreshTimer() {
+  scheduleNextRefresh();
 }
 
 function setRoute(route, options = {}) {
@@ -305,15 +355,10 @@ function routeFromHash() {
 
 function updateHeader() {
   const meta = PAGE_META[state.route] || PAGE_META.overview;
-  elements.pageKicker.textContent = meta.kicker;
   elements.pageTitle.textContent = meta.title;
-  elements.pageSubtitle.textContent = meta.subtitle;
   elements.navItems.forEach((item) => {
     item.classList.toggle("active", item.dataset.route === state.route);
   });
-
-  const station = state.status?.station || {};
-  elements.stationBadge.textContent = `${text(station.name || "Station")} / ${text(station.ip_address)}`;
 }
 
 function readiness(data) {
@@ -326,23 +371,20 @@ function readiness(data) {
   if (internetDown || criticalDown.length > 0) {
     return {
       status: "critical",
-      title: "PROBLEM",
-      message: "A critical network path component is not online.",
+      title: "Problem",
     };
   }
 
   if (warnings.length > 0 || gatewayIssues.length > 0) {
     return {
       status: "warning",
-      title: "WARNINGS",
-      message: "The show network is reachable, with issues that need attention.",
+      title: "Warnings",
     };
   }
 
   return {
     status: "online",
-    title: "SHOW NETWORK READY",
-    message: "Critical checks are online and VLAN gateways are reachable.",
+    title: "Ready",
   };
 }
 
@@ -446,9 +488,7 @@ function renderOverview(data) {
 
   const hero = el("section", { className: `ready-panel ${statusClass(ready.status)}` }, [
     el("div", { className: "ready-copy" }, [
-      el("span", { className: "ready-kicker", text: "Current state" }),
       el("h3", { text: ready.title }),
-      el("p", { text: ready.message }),
     ]),
     el("div", { className: "ready-meta" }, [
       el("span", { text: `${countByStatus(devices, "online")} devices online` }),
@@ -462,36 +502,71 @@ function renderOverview(data) {
     summaryCard("LANCOM Router", formatStatus(router?.status || "unknown"), router?.status, "router", text(router?.ip_address), router),
     summaryCard("FOH Switch", formatStatus(foh?.status || "unknown"), foh?.status, "switch", text(foh?.ip_address), foh),
     summaryCard(stages.length > 1 ? "Stage Switches" : "Stage Switch", formatStatus(stageStatus), stageStatus, "switch", stages.length > 1 ? `${stages.length} switches` : text(stages[0]?.ip_address), stages.length === 1 ? stages[0] : null),
-    summaryCard("VLAN Gateways", `${gatewayOnline}/${vlans.length} Online`, gatewayOnline === vlans.length ? "online" : "warning", "shield", "Gateway reachability"),
+    summaryCard("VLAN Gateways", `${gatewayOnline}/${vlans.length} Online`, gatewayOnline === vlans.length ? "online" : "warning", "shield"),
     summaryCard("Devices", `${devices.length} discovered`, countByStatus(devices, "offline") > 0 ? "warning" : "online", "devices", `${countByStatus(devices, "online")} online`),
   ]);
 
   const compactTopology = el("section", { className: "panel" }, [
-    sectionTitle("Network Path", "Compact topology overview."),
-    el("div", { className: "compact-topology" }, topologyChain(data).map((node, index, nodes) => compactTopologyNode(node, index < nodes.length - 1))),
+    sectionTitle("Network Path"),
+    overviewTopologyGraph(data),
     el("button", { className: "link-button", text: "View full topology", attrs: { type: "button", "data-route-link": "topology" } }),
   ]);
 
   const vlanCards = el("section", { className: "panel" }, [
-    sectionTitle("VLAN Summary", "Click a VLAN to open matching devices."),
+    sectionTitle("VLANs"),
     el("div", { className: "vlan-card-grid" }, (data.devices_by_vlan || []).map((group) => vlanSummaryCard(group, data))),
   ]);
 
   elements.pageContent.append(hero, warnings, summary, compactTopology, vlanCards);
 }
 
-function compactTopologyNode(node, showArrow) {
-  return el("div", { className: "compact-topology-step" }, [
-    el("article", { className: "compact-topology-node" }, [
-      el("span", { className: "topology-icon", html: icon(node.icon) }),
-      el("div", { className: "compact-node-copy" }, [
-        el("strong", { text: node.label }),
-        el("span", { text: `${node.role} / ${text(node.ip)}` }),
-      ]),
-      statusDot(node.status),
-      node.item ? openWebAction(node.item) : el("span"),
+function overviewTopologyGraph(data) {
+  const chain = topologyChain(data);
+  const spine = el("div", { className: "topology-spine" });
+  chain.forEach((node, index) => {
+    spine.append(topologyGraphNode(node));
+    if (index < chain.length - 1) {
+      spine.append(topologyGraphConnector());
+    }
+  });
+
+  return el("div", { className: "overview-topology-graph" }, [
+    spine,
+    el("div", { className: "topology-branch" }, [
+      el("div", { className: "topology-vlan-grid" }, (data.devices_by_vlan || []).map((group) => topologyVlanNode(group, data))),
     ]),
-    showArrow ? el("span", { className: "compact-arrow", html: icon("arrow"), attrs: { "aria-hidden": "true" } }) : el("span"),
+  ]);
+}
+
+function topologyGraphConnector() {
+  return el("span", { className: "topology-graph-connector", html: icon("arrow"), attrs: { "aria-hidden": "true" } });
+}
+
+function topologyGraphNode(node) {
+  return el("article", { className: `topology-graph-node ${statusClass(node.status)}` }, [
+    statusDot(node.status),
+    el("span", { className: "topology-graph-icon", html: icon(node.icon) }),
+    el("div", { className: "topology-graph-copy" }, [
+      el("strong", { text: node.label }),
+      el("span", { text: `${node.role} / ${text(node.ip)}` }),
+    ]),
+    node.item ? openWebAction(node.item) : el("span", { className: "graph-action-placeholder" }),
+  ]);
+}
+
+function topologyVlanNode(group, data) {
+  const status = vlanStatus(group, data);
+  return el("button", {
+    className: `topology-vlan-node ${statusClass(status)}`,
+    attrs: { type: "button", "data-vlan-link": group.id },
+  }, [
+    statusDot(status),
+    el("span", { className: "topology-vlan-icon", html: icon(vlanIconName(group.name)) }),
+    el("span", { className: "topology-vlan-copy" }, [
+      el("strong", { text: group.name }),
+      el("span", { text: `VLAN ${group.id}` }),
+    ]),
+    el("span", { className: "topology-vlan-count", text: group.counts?.known ?? 0 }),
   ]);
 }
 
@@ -500,7 +575,7 @@ function renderWarningStack(warnings) {
   if (warnings.length === 0) {
     panel.append(el("div", { className: "notice online" }, [
       statusDot("online"),
-      el("span", { text: "No active warnings." }),
+      el("span", { text: "No warnings" }),
     ]));
     return panel;
   }
@@ -515,11 +590,12 @@ function renderWarningStack(warnings) {
 }
 
 function sectionTitle(title, subtitle = "") {
+  const titleChildren = [el("h3", { text: title })];
+  if (subtitle) {
+    titleChildren.push(el("p", { text: subtitle }));
+  }
   return el("div", { className: "section-title" }, [
-    el("div", {}, [
-      el("h3", { text: title }),
-      subtitle ? el("p", { text: subtitle }) : el("p"),
-    ]),
+    el("div", {}, titleChildren),
   ]);
 }
 
@@ -628,8 +704,9 @@ function renderDevices(data) {
 
 function renderDeviceFilters(data, sources) {
   const vlans = data.devices_by_vlan || [];
+  const hasFilters = filtersActive();
   return el("section", { className: "filter-panel" }, [
-    el("label", { className: "search-field" }, [
+    el("label", { className: `search-field ${state.filters.search ? "active-filter" : ""}` }, [
       el("span", { html: icon("search") }),
       el("input", {
         attrs: {
@@ -644,10 +721,21 @@ function renderDeviceFilters(data, sources) {
     selectField("Status", "statusFilter", state.filters.status, [["all", "All statuses"], ["online", "Online"], ["offline", "Offline"], ["unknown", "Unknown"]]),
     selectField("Source", "sourceFilter", state.filters.source, [["all", "All sources"], ...sources.map((item) => [item, item])]),
     selectField("Type", "expectedFilter", state.filters.expected, [["all", "All devices"], ["expected", "Expected"], ["unexpected", "Discovered only"], ["unknown-location", "Unknown location"]]),
+    el("button", {
+      className: "clear-filters-button",
+      text: "Clear filters",
+      attrs: {
+        type: "button",
+        "data-clear-filters": "true",
+        title: "Clear all filters",
+        disabled: hasFilters ? null : "",
+      },
+    }),
   ]);
 }
 
 function selectField(label, id, value, options) {
+  const active = String(value || "all") !== "all";
   const select = el("select", { attrs: { id } });
   options.forEach(([optionValue, optionLabel]) => {
     const option = el("option", { text: optionLabel, attrs: { value: optionValue } });
@@ -656,7 +744,7 @@ function selectField(label, id, value, options) {
     }
     select.append(option);
   });
-  return el("label", { className: "select-field" }, [
+  return el("label", { className: `select-field ${active ? "active-filter" : ""}` }, [
     el("span", { text: label }),
     select,
   ]);
@@ -688,7 +776,12 @@ function deviceGroup(group) {
   const section = el("section", { className: `device-group ${collapsed ? "collapsed" : ""}` });
   section.append(el("button", {
     className: "device-group-toggle",
-    attrs: { type: "button", "data-vlan-toggle": group.id },
+    attrs: {
+      type: "button",
+      "data-vlan-toggle": group.id,
+      "aria-expanded": collapsed ? "false" : "true",
+      title: collapsed ? "Expand VLAN group" : "Collapse VLAN group",
+    },
   }, [
     el("span", { className: "chevron", html: icon("chevron") }),
     el("span", { className: "vlan-icon", html: icon(vlanIconName(group.name)) }),
@@ -718,6 +811,7 @@ function deviceRow(device) {
     row.open = true;
   }
   row.append(el("summary", { className: "device-summary" }, [
+    el("span", { className: "device-expand-icon", html: icon("chevron"), attrs: { "aria-hidden": "true" } }),
     statusDot(device.status),
     el("div", { className: "device-primary" }, [
       el("strong", { text: device.display_name || device.name || device.ip_address }),
@@ -726,6 +820,7 @@ function deviceRow(device) {
     el("span", { className: "device-vlan", text: `${text(device.vlan_name)} / ${text(device.vlan_id)}` }),
     badge(device.role || firstSource(device), device.expected ? "expected" : "neutral"),
     statusPill(device.status),
+    el("span", { className: "details-hint", text: "Details" }),
     openWebAction(device),
   ]));
   row.append(el("div", { className: "device-details" }, [
@@ -763,7 +858,7 @@ function renderTopologyPage(data) {
   });
 
   const lanes = el("section", { className: "panel" }, [
-    sectionTitle("VLAN Lanes", "Counts only here; open Devices for host-level detail."),
+    sectionTitle("VLANs"),
     el("div", { className: "vlan-lane-grid" }, (data.devices_by_vlan || []).map((group) => vlanLane(group, data))),
   ]);
 
@@ -803,14 +898,14 @@ function renderSettings(data) {
     el("section", { className: "settings-grid" }, [
       settingsCard("Appearance", [
         segmentedSetting("Theme", "theme", state.settings.theme, [["system", "System"], ["dark", "Dark"], ["light", "Light"]]),
-        toggleSetting("Compact mode", "compactMode", state.settings.compactMode, "Use tighter spacing across cards and lists."),
+        toggleSetting("Compact mode", "compactMode", state.settings.compactMode),
       ]),
       settingsCard("Refresh", [
         segmentedSetting("Interval", "refreshInterval", String(state.settings.refreshInterval), [["5000", "5s"], ["10000", "10s"], ["30000", "30s"], ["60000", "60s"]]),
       ]),
       settingsCard("Discovery Display", [
-        toggleSetting("Show unknown devices", "showUnknownDevices", state.settings.showUnknownDevices, "Show hosts discovered only by collectors."),
-        toggleSetting("Show offline devices", "showOfflineDevices", state.settings.showOfflineDevices, "Keep offline hosts visible in the Devices page."),
+        toggleSetting("Show unknown devices", "showUnknownDevices", state.settings.showUnknownDevices),
+        toggleSetting("Show offline devices", "showOfflineDevices", state.settings.showOfflineDevices),
       ]),
       settingsCard("Runtime", [
         readonlyLine("App version", APP_VERSION),
@@ -845,13 +940,12 @@ function segmentedSetting(label, key, value, options) {
   return group;
 }
 
-function toggleSetting(label, key, checked, help) {
+function toggleSetting(label, key, checked) {
   const input = el("input", { attrs: { type: "checkbox", "data-toggle-setting": key } });
   input.checked = Boolean(checked);
   return el("label", { className: "toggle-row" }, [
     el("span", {}, [
       el("strong", { text: label }),
-      el("small", { text: help }),
     ]),
     input,
     el("span", { className: "toggle-visual" }),
@@ -900,8 +994,35 @@ function render() {
   }
 }
 
-async function loadStatus() {
+function captureDeviceScroll() {
+  if (state.route !== "devices") {
+    return null;
+  }
+  return { left: window.scrollX, top: window.scrollY };
+}
+
+function restoreDeviceScroll(position) {
+  if (!position || state.route !== "devices") {
+    return;
+  }
+  window.requestAnimationFrame(() => {
+    window.scrollTo(position.left, position.top);
+  });
+}
+
+async function loadStatus(options = {}) {
+  if (state.loading) {
+    return;
+  }
+
+  const scrollPosition = options.preserveScroll === false ? null : captureDeviceScroll();
+  if (state.refreshTimer) {
+    window.clearTimeout(state.refreshTimer);
+    state.refreshTimer = null;
+  }
+  state.nextRefreshAt = Date.now();
   state.loading = true;
+  updateStatusBar();
   elements.refreshButton.disabled = true;
   if (!state.status) {
     render();
@@ -922,6 +1043,8 @@ async function loadStatus() {
     state.loading = false;
     elements.refreshButton.disabled = false;
     render();
+    restoreDeviceScroll(scrollPosition);
+    scheduleNextRefresh();
   }
 }
 
@@ -961,7 +1084,7 @@ function bindEvents() {
   });
 
   elements.settingsButton.addEventListener("click", () => setRoute("settings"));
-  elements.refreshButton.addEventListener("click", loadStatus);
+  elements.refreshButton.addEventListener("click", () => loadStatus({ preserveScroll: true }));
 
   elements.pageContent.addEventListener("input", (event) => {
     const target = event.target;
@@ -981,6 +1104,12 @@ function bindEvents() {
     const action = event.target.closest(".action-button");
     if (action) {
       event.stopPropagation();
+      return;
+    }
+
+    const clearFiltersButton = event.target.closest("[data-clear-filters]");
+    if (clearFiltersButton) {
+      clearFilters();
       return;
     }
 
@@ -1053,6 +1182,7 @@ function init() {
   applyDensity();
   setIconContainers();
   bindEvents();
+  updateClockTimer();
   updateRefreshTimer();
   render();
   loadStatus();

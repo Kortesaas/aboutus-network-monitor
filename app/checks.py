@@ -89,7 +89,11 @@ async def ping_check(target: str | None, timeout_seconds: float = 1.5, count: in
         )
     except asyncio.TimeoutError:
         if "process" in locals():
-            process.kill()
+            if process.returncode is None:
+                try:
+                    process.kill()
+                except ProcessLookupError:
+                    pass
             await process.communicate()
         latency_ms = round((time.monotonic() - start) * 1000)
         return _result(
