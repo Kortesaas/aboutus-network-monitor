@@ -213,7 +213,9 @@ p {
 }
 
 .primary-button,
-.icon-button {
+.icon-button,
+.action-button,
+.link-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -234,6 +236,32 @@ p {
   width: 42px;
   padding: 0;
   border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.action-button {
+  flex: 0 0 auto;
+  width: 34px;
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-2) 88%, transparent);
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.action-button:hover {
+  border-color: color-mix(in srgb, var(--accent) 44%, var(--border));
+  color: var(--accent);
+}
+
+.link-button {
+  justify-self: start;
+  min-height: 38px;
+  padding: 0 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
   background: var(--surface-2);
   color: var(--text);
 }
@@ -370,6 +398,12 @@ button:disabled {
   gap: 12px;
   min-height: 104px;
   padding: var(--pad);
+}
+
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .summary-icon,
@@ -527,24 +561,24 @@ button:disabled {
 .mini-counts {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
 }
 
 .mini-count {
   min-width: 0;
-  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 7px 8px;
   border-radius: 8px;
   background: var(--surface-2);
-}
-
-.mini-count strong,
-.mini-count span {
-  display: block;
 }
 
 .mini-count span {
   color: var(--subtle);
   font-size: 0.72rem;
+  text-transform: uppercase;
 }
 
 .filter-panel {
@@ -725,6 +759,53 @@ select {
   display: grid;
   grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
   gap: var(--gap);
+}
+
+.compact-topology {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.compact-topology-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: min(260px, 78vw);
+}
+
+.compact-topology-node {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 0 auto;
+  min-height: 72px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.compact-node-copy {
+  min-width: 0;
+  margin-right: auto;
+}
+
+.compact-node-copy strong,
+.compact-node-copy span {
+  display: block;
+}
+
+.compact-node-copy span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.compact-arrow {
+  flex: 0 0 auto;
+  color: var(--subtle);
 }
 
 .topology-path {
@@ -931,6 +1012,10 @@ select {
   }
 
   .summary-card .status-pill {
+    justify-self: start;
+  }
+
+  .summary-card .card-actions {
     grid-column: 1 / -1;
     justify-self: start;
   }

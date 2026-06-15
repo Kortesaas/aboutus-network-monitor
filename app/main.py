@@ -14,7 +14,7 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 app = FastAPI(
     title="ABOUTUS Network Monitor",
-    version="0.3.0",
+    version="0.4.0",
     docs_url="/api/docs",
     redoc_url=None,
 )
@@ -23,6 +23,11 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 @app.get("/", include_in_schema=False)
 async def dashboard() -> FileResponse:
+    return FileResponse(STATIC_DIR / "index.html")
+
+
+@app.head("/", include_in_schema=False)
+async def dashboard_head() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
 
 

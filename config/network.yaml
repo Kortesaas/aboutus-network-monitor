@@ -23,6 +23,7 @@ infrastructure:
     role: Router
     model: LANCOM 1783VAW
     ip_address: 192.168.99.1
+    web_url: http://192.168.99.1
     vlan: MGMT
     check:
       type: ping
@@ -32,6 +33,7 @@ infrastructure:
     role: FOH core switch
     model: Allied Telesis AT-GS950/48
     ip_address: 192.168.99.2
+    web_url: http://192.168.99.2
     vlan: MGMT
     check:
       type: ping
@@ -41,6 +43,7 @@ infrastructure:
     role: Stage switch
     model: TP-Link TL-SG1016PE
     ip_address: 192.168.99.3
+    web_url: http://192.168.99.3
     vlan: MGMT
     check:
       type: ping
@@ -105,6 +108,7 @@ inventory:
   - id: lancom-router
     name: LANCOM Router
     ip: 192.168.99.1
+    web_url: http://192.168.99.1
     vlan: MGMT
     role: router
     expected: true
@@ -122,6 +126,7 @@ inventory:
   - id: foh-switch
     name: FOH Switch AT-GS950/48
     ip: 192.168.99.2
+    web_url: http://192.168.99.2
     vlan: MGMT
     role: switch
     expected: true
@@ -139,6 +144,7 @@ inventory:
   - id: stage-switch
     name: Stage Switch TL-SG1016PE
     ip: 192.168.99.3
+    web_url: http://192.168.99.3
     vlan: MGMT
     role: switch
     expected: true

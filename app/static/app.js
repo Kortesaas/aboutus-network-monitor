@@ -1,6 +1,9 @@
-const APP_VERSION = "0.3.0";
+const APP_VERSION = "0.4.0";
 const SETTINGS_KEY = "aboutus-network-monitor-ui-settings-v3";
 const COLLAPSE_KEY = "aboutus-network-monitor-collapsed-vlans-v3";
+const OPEN_DEVICES_KEY = "aboutus-network-monitor-open-devices-v4";
+const FILTERS_KEY = "aboutus-network-monitor-device-filters-v4";
+const ROUTE_KEY = "aboutus-network-monitor-active-route-v4";
 
 const DEFAULT_SETTINGS = {
   theme: "dark",
@@ -54,13 +57,8 @@ const state = {
   refreshTimer: null,
   settings: loadSettings(),
   collapsedVlans: loadCollapsedVlans(),
-  filters: {
-    search: "",
-    vlan: "all",
-    status: "all",
-    source: "all",
-    expected: "all",
-  },
+  openDevices: loadOpenDevices(),
+  filters: loadFilters(),
 };
 
 function icon(name) {
@@ -70,6 +68,8 @@ function icon(name) {
     topology: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3h2v4h-2V3Zm0 14h2v4h-2v-4ZM5 9h14v6H5V9Zm2 2v2h10v-2H7ZM3 11H1V7h6v2H3v2Zm20 0h-2V9h-4V7h6v4Z"/></svg>',
     settings: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 13.5c.1-.5.1-1 .1-1.5s0-1-.1-1.5l2-1.5-2-3.5-2.4 1a7.5 7.5 0 0 0-2.6-1.5L14 2h-4l-.4 2.5A7.5 7.5 0 0 0 7 6L4.6 5l-2 3.5 2 1.5c-.1.5-.1 1-.1 1.5s0 1 .1 1.5l-2 1.5 2 3.5 2.4-1a7.5 7.5 0 0 0 2.6 1.5L10 22h4l.4-2.5A7.5 7.5 0 0 0 17 18l2.4 1 2-3.5-2-1.5ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z"/></svg>',
     refresh: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.7 6.3A8 8 0 1 0 20 12h-2a6 6 0 1 1-1.8-4.3L13 11h8V3l-3.3 3.3Z"/></svg>',
+    external: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3h7v7h-2V6.4l-8.3 8.3-1.4-1.4L17.6 5H14V3ZM5 5h7v2H7v10h10v-5h2v7H5V5Z"/></svg>',
+    arrow: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5.6 19.4 12 13 18.4 11.6 17l4-4H4v-2h11.6l-4-4L13 5.6Z"/></svg>',
     internet: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm6.9 9h-3.1a15 15 0 0 0-1.1-5 8.1 8.1 0 0 1 4.2 5ZM12 4.1c.7 1 1.4 3.3 1.7 6.9h-3.4c.3-3.6 1-5.9 1.7-6.9ZM4.3 13h3.9c.1 1.7.4 3.3.8 4.7A8.1 8.1 0 0 1 4.3 13Zm3.9-2H4.3A8.1 8.1 0 0 1 9 6.3 18 18 0 0 0 8.2 11Zm3.8 8.9c-.7-1-1.4-3.3-1.7-6.9h3.4c-.3 3.6-1 5.9-1.7 6.9Zm3-2.2c.4-1.4.7-3 .8-4.7h3.9a8.1 8.1 0 0 1-4.7 4.7Z"/></svg>',
     router: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11h16v8H4v-8Zm2 2v4h12v-4H6Zm1 3h2v-2H7v2Zm4 0h2v-2h-2v2Zm7-9 1.4-1.4A10.5 10.5 0 0 0 12 2a10.5 10.5 0 0 0-7.4 3.1L6 6.5A8.5 8.5 0 0 1 12 4c2.3 0 4.4.9 6 3Zm-3 3 1.4-1.4A6.2 6.2 0 0 0 12 6.8c-1.7 0-3.2.7-4.4 1.8L9 10a4.3 4.3 0 0 1 6 0Z"/></svg>',
     switch: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v10H3V7Zm2 2v6h14V9H5Zm1 5h2v-2H6v2Zm3 0h2v-2H9v2Zm3 0h2v-2h-2v2Zm3 0h2v-2h-2v2ZM7 4h10v2H7V4Zm0 14h10v2H7v-2Z"/></svg>',
@@ -107,6 +107,40 @@ function loadCollapsedVlans() {
 
 function saveCollapsedVlans() {
   localStorage.setItem(COLLAPSE_KEY, JSON.stringify(Array.from(state.collapsedVlans)));
+}
+
+function defaultFilters() {
+  return {
+    search: "",
+    vlan: "all",
+    status: "all",
+    source: "all",
+    expected: "all",
+  };
+}
+
+function loadFilters() {
+  try {
+    return { ...defaultFilters(), ...JSON.parse(localStorage.getItem(FILTERS_KEY) || "{}") };
+  } catch {
+    return defaultFilters();
+  }
+}
+
+function saveFilters() {
+  localStorage.setItem(FILTERS_KEY, JSON.stringify(state.filters));
+}
+
+function loadOpenDevices() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(OPEN_DEVICES_KEY) || "[]"));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveOpenDevices() {
+  localStorage.setItem(OPEN_DEVICES_KEY, JSON.stringify(Array.from(state.openDevices)));
 }
 
 function text(value) {
@@ -191,6 +225,37 @@ function badge(label, tone = "neutral") {
   return el("span", { className: `badge ${tone}`, text: text(label) });
 }
 
+function webUrlFor(item) {
+  if (item?.web_url && !isUnknown(item.web_url)) {
+    return item.web_url;
+  }
+  if (item?.ip_address && !isUnknown(item.ip_address)) {
+    return `http://${item.ip_address}`;
+  }
+  if (item?.ip && !isUnknown(item.ip)) {
+    return `http://${item.ip}`;
+  }
+  return null;
+}
+
+function openWebAction(item, label = "Open web interface") {
+  const href = webUrlFor(item);
+  if (!href) {
+    return el("span");
+  }
+  return el("a", {
+    className: "action-button",
+    html: icon("external"),
+    attrs: {
+      href,
+      target: "_blank",
+      rel: "noopener noreferrer",
+      title: label,
+      "aria-label": label,
+    },
+  });
+}
+
 function unknownLabel(value) {
   return el("span", {
     className: isUnknown(value) ? "value unknown-value" : "value",
@@ -221,7 +286,9 @@ function setRoute(route, options = {}) {
   state.route = PAGE_META[route] ? route : "overview";
   if (options.vlan !== undefined) {
     state.filters.vlan = String(options.vlan);
+    saveFilters();
   }
+  localStorage.setItem(ROUTE_KEY, state.route);
   window.location.hash = state.route;
   render();
   elements.pageContent.focus({ preventScroll: true });
@@ -229,7 +296,11 @@ function setRoute(route, options = {}) {
 
 function routeFromHash() {
   const route = window.location.hash.replace("#", "");
-  return PAGE_META[route] ? route : "overview";
+  if (PAGE_META[route]) {
+    return route;
+  }
+  const savedRoute = localStorage.getItem(ROUTE_KEY);
+  return PAGE_META[savedRoute] ? savedRoute : "overview";
 }
 
 function updateHeader() {
@@ -246,9 +317,8 @@ function updateHeader() {
 }
 
 function readiness(data) {
-  const criticalIds = new Set(["lancom-router", "foh-switch", "stage-switch"]);
-  const infrastructure = data.infrastructure || [];
-  const criticalDown = infrastructure.filter((item) => criticalIds.has(item.id) && item.status !== "online");
+  const critical = [primaryRouter(data), primaryFohSwitch(data), ...stageSwitches(data)].filter(Boolean);
+  const criticalDown = critical.filter((item) => item.status !== "online");
   const internetDown = data.internet?.status !== "online";
   const gatewayIssues = (data.vlans || []).filter((vlan) => vlan.gateway_status !== "online");
   const warnings = data.warnings || [];
@@ -284,7 +354,45 @@ function infraById(data, id) {
   return (data.infrastructure || []).find((item) => item.id === id);
 }
 
-function summaryCard(label, value, status, iconName, caption = "") {
+function infrastructureItems(data) {
+  return data.infrastructure || [];
+}
+
+function roleText(item) {
+  return normalize(item?.role || item?.id || item?.name || "");
+}
+
+function isRouter(item) {
+  const role = roleText(item);
+  return item?.id === "lancom-router" || role.includes("router");
+}
+
+function isFohSwitch(item) {
+  const role = roleText(item);
+  const name = normalize(item?.name);
+  return item?.id === "foh-switch" || role.includes("foh") || role.includes("core-switch") || name.includes("foh");
+}
+
+function isStageSwitch(item) {
+  const role = roleText(item);
+  const name = normalize(item?.name);
+  return item?.id === "stage-switch" || item?.id?.startsWith("stage-switch") || role.includes("stage") || name.includes("stage");
+}
+
+function primaryRouter(data) {
+  return infrastructureItems(data).find(isRouter) || infraById(data, "lancom-router");
+}
+
+function primaryFohSwitch(data) {
+  return infrastructureItems(data).find(isFohSwitch) || infraById(data, "foh-switch");
+}
+
+function stageSwitches(data) {
+  const stages = infrastructureItems(data).filter(isStageSwitch);
+  return stages.length > 0 ? stages : [infraById(data, "stage-switch")].filter(Boolean);
+}
+
+function summaryCard(label, value, status, iconName, caption = "", actionItem = null) {
   return el("article", { className: "summary-card" }, [
     el("div", { className: "summary-icon", html: icon(iconName) }),
     el("div", { className: "summary-body" }, [
@@ -292,8 +400,38 @@ function summaryCard(label, value, status, iconName, caption = "") {
       el("strong", { text: text(value) }),
       caption ? el("span", { className: "summary-caption", text: caption }) : el("span"),
     ]),
-    statusPill(status),
+    el("div", { className: "card-actions" }, [
+      actionItem ? openWebAction(actionItem) : el("span"),
+      statusPill(status),
+    ]),
   ]);
+}
+
+function aggregateStatus(items) {
+  const present = items.filter(Boolean);
+  if (present.length === 0) return "unknown";
+  if (present.some((item) => item.status === "offline")) return "offline";
+  if (present.some((item) => item.status !== "online")) return "warning";
+  return "online";
+}
+
+function topologyChain(data) {
+  const router = primaryRouter(data);
+  const foh = primaryFohSwitch(data);
+  const stages = stageSwitches(data);
+  return [
+    { label: "Internet / 5G Uplink", role: "WAN", status: data.internet?.status || "unknown", ip: "External", icon: "internet" },
+    router ? { label: router.name || "LANCOM 1783VAW", role: router.role || "Router", status: router.status, ip: router.ip_address, icon: "router", item: router } : null,
+    foh ? { label: foh.name || "FOH AT-GS950/48", role: foh.role || "FOH core", status: foh.status, ip: foh.ip_address, icon: "switch", item: foh } : null,
+    ...stages.map((stage, index) => ({
+      label: stage.name || `Stage switch ${index + 1}`,
+      role: stage.role || "Stage switch",
+      status: stage.status,
+      ip: stage.ip_address,
+      icon: "switch",
+      item: stage,
+    })),
+  ].filter(Boolean);
 }
 
 function renderOverview(data) {
@@ -301,9 +439,10 @@ function renderOverview(data) {
   const devices = data.devices || [];
   const vlans = data.vlans || [];
   const gatewayOnline = vlans.filter((vlan) => vlan.gateway_status === "online").length;
-  const router = infraById(data, "lancom-router");
-  const foh = infraById(data, "foh-switch");
-  const stage = infraById(data, "stage-switch");
+  const router = primaryRouter(data);
+  const foh = primaryFohSwitch(data);
+  const stages = stageSwitches(data);
+  const stageStatus = aggregateStatus(stages);
 
   const hero = el("section", { className: `ready-panel ${statusClass(ready.status)}` }, [
     el("div", { className: "ready-copy" }, [
@@ -320,11 +459,17 @@ function renderOverview(data) {
   const warnings = renderWarningStack(data.warnings || []);
   const summary = el("section", { className: "summary-grid" }, [
     summaryCard("Internet", formatStatus(data.internet?.status || "unknown"), data.internet?.status, "internet", `${(data.internet?.probes || []).length} probes`),
-    summaryCard("LANCOM Router", formatStatus(router?.status || "unknown"), router?.status, "router", text(router?.ip_address)),
-    summaryCard("FOH Switch", formatStatus(foh?.status || "unknown"), foh?.status, "switch", text(foh?.ip_address)),
-    summaryCard("Stage Switch", formatStatus(stage?.status || "unknown"), stage?.status, "switch", text(stage?.ip_address)),
+    summaryCard("LANCOM Router", formatStatus(router?.status || "unknown"), router?.status, "router", text(router?.ip_address), router),
+    summaryCard("FOH Switch", formatStatus(foh?.status || "unknown"), foh?.status, "switch", text(foh?.ip_address), foh),
+    summaryCard(stages.length > 1 ? "Stage Switches" : "Stage Switch", formatStatus(stageStatus), stageStatus, "switch", stages.length > 1 ? `${stages.length} switches` : text(stages[0]?.ip_address), stages.length === 1 ? stages[0] : null),
     summaryCard("VLAN Gateways", `${gatewayOnline}/${vlans.length} Online`, gatewayOnline === vlans.length ? "online" : "warning", "shield", "Gateway reachability"),
     summaryCard("Devices", `${devices.length} discovered`, countByStatus(devices, "offline") > 0 ? "warning" : "online", "devices", `${countByStatus(devices, "online")} online`),
+  ]);
+
+  const compactTopology = el("section", { className: "panel" }, [
+    sectionTitle("Network Path", "Compact topology overview."),
+    el("div", { className: "compact-topology" }, topologyChain(data).map((node, index, nodes) => compactTopologyNode(node, index < nodes.length - 1))),
+    el("button", { className: "link-button", text: "View full topology", attrs: { type: "button", "data-route-link": "topology" } }),
   ]);
 
   const vlanCards = el("section", { className: "panel" }, [
@@ -332,7 +477,22 @@ function renderOverview(data) {
     el("div", { className: "vlan-card-grid" }, (data.devices_by_vlan || []).map((group) => vlanSummaryCard(group, data))),
   ]);
 
-  elements.pageContent.append(hero, warnings, summary, vlanCards);
+  elements.pageContent.append(hero, warnings, summary, compactTopology, vlanCards);
+}
+
+function compactTopologyNode(node, showArrow) {
+  return el("div", { className: "compact-topology-step" }, [
+    el("article", { className: "compact-topology-node" }, [
+      el("span", { className: "topology-icon", html: icon(node.icon) }),
+      el("div", { className: "compact-node-copy" }, [
+        el("strong", { text: node.label }),
+        el("span", { text: `${node.role} / ${text(node.ip)}` }),
+      ]),
+      statusDot(node.status),
+      node.item ? openWebAction(node.item) : el("span"),
+    ]),
+    showArrow ? el("span", { className: "compact-arrow", html: icon("arrow"), attrs: { "aria-hidden": "true" } }) : el("span"),
+  ]);
 }
 
 function renderWarningStack(warnings) {
@@ -394,17 +554,17 @@ function vlanSummaryCard(group, data) {
       statusDot(status),
     ]),
     el("div", { className: "mini-counts" }, [
-      miniCount("Known", group.counts?.known ?? 0),
-      miniCount("Online", group.counts?.online ?? 0),
-      miniCount("Offline", group.counts?.offline ?? 0),
-      miniCount("Unknown", group.counts?.unknown ?? 0),
+      miniCount("Total", group.counts?.known ?? 0, "Known devices"),
+      miniCount("Up", group.counts?.online ?? 0, "Online devices"),
+      miniCount("Down", group.counts?.offline ?? 0, "Offline devices"),
+      miniCount("Unk", group.counts?.unknown ?? 0, "Unknown status devices"),
     ]),
   ]);
   return card;
 }
 
-function miniCount(label, value) {
-  return el("span", { className: "mini-count" }, [
+function miniCount(label, value, title = label) {
+  return el("span", { className: "mini-count", attrs: { title } }, [
     el("strong", { text: value }),
     el("span", { text: label }),
   ]);
@@ -543,9 +703,20 @@ function deviceGroup(group) {
   return section;
 }
 
+function deviceKey(device) {
+  return String(device.ip_address || device.mac_address || device.id || device.display_name || device.name);
+}
+
 function deviceRow(device) {
-  const detailId = `device-${String(device.ip_address).replaceAll(".", "-")}`;
-  const row = el("details", { className: "device-row", attrs: { id: detailId } });
+  const key = deviceKey(device);
+  const detailId = `device-${key.replaceAll(".", "-").replaceAll(":", "-").replaceAll(" ", "-")}`;
+  const row = el("details", {
+    className: "device-row",
+    attrs: { id: detailId, "data-device-key": key },
+  });
+  if (state.openDevices.has(key)) {
+    row.open = true;
+  }
   row.append(el("summary", { className: "device-summary" }, [
     statusDot(device.status),
     el("div", { className: "device-primary" }, [
@@ -555,6 +726,7 @@ function deviceRow(device) {
     el("span", { className: "device-vlan", text: `${text(device.vlan_name)} / ${text(device.vlan_id)}` }),
     badge(device.role || firstSource(device), device.expected ? "expected" : "neutral"),
     statusPill(device.status),
+    openWebAction(device),
   ]));
   row.append(el("div", { className: "device-details" }, [
     detailItem("MAC", device.mac_address),
@@ -580,15 +752,7 @@ function detailItem(label, value) {
 }
 
 function renderTopologyPage(data) {
-  const router = infraById(data, "lancom-router");
-  const foh = infraById(data, "foh-switch");
-  const stage = infraById(data, "stage-switch");
-  const chain = [
-    { label: "Internet / 5G Uplink", role: "WAN", status: data.internet?.status || "unknown", ip: "External", icon: "internet" },
-    { label: router?.name || "LANCOM 1783VAW", role: "Router", status: router?.status || "unknown", ip: router?.ip_address, icon: "router" },
-    { label: foh?.name || "FOH AT-GS950/48", role: "FOH core", status: foh?.status || "unknown", ip: foh?.ip_address, icon: "switch" },
-    { label: stage?.name || "Stage TL-SG1016PE", role: "Stage switch", status: stage?.status || "unknown", ip: stage?.ip_address, icon: "switch" },
-  ];
+  const chain = topologyChain(data);
 
   const path = el("section", { className: "topology-path" });
   chain.forEach((node, index) => {
@@ -613,6 +777,7 @@ function topologyNode(node) {
       el("strong", { text: node.label }),
       el("span", { text: `${node.role} / ${text(node.ip)}` }),
     ]),
+    node.item ? openWebAction(node.item) : el("span"),
     statusPill(node.status),
   ]);
 }
@@ -738,7 +903,9 @@ function render() {
 async function loadStatus() {
   state.loading = true;
   elements.refreshButton.disabled = true;
-  render();
+  if (!state.status) {
+    render();
+  }
 
   try {
     const response = await fetch("/api/status", { cache: "no-store" });
@@ -762,6 +929,7 @@ function updateFilter(key, value) {
   const searchInput = document.querySelector("#deviceSearch");
   const selectionStart = key === "search" && searchInput ? searchInput.selectionStart : null;
   state.filters[key] = value;
+  saveFilters();
   render();
 
   if (key === "search") {
@@ -810,6 +978,18 @@ function bindEvents() {
   });
 
   elements.pageContent.addEventListener("click", (event) => {
+    const action = event.target.closest(".action-button");
+    if (action) {
+      event.stopPropagation();
+      return;
+    }
+
+    const routeLink = event.target.closest("[data-route-link]");
+    if (routeLink) {
+      setRoute(routeLink.dataset.routeLink);
+      return;
+    }
+
     const vlanLink = event.target.closest("[data-vlan-link]");
     if (vlanLink) {
       setRoute("devices", { vlan: vlanLink.dataset.vlanLink });
@@ -836,8 +1016,26 @@ function bindEvents() {
     }
   });
 
+  elements.pageContent.addEventListener("toggle", (event) => {
+    const row = event.target.closest?.(".device-row");
+    if (!row) {
+      return;
+    }
+    const key = row.dataset.deviceKey;
+    if (!key) {
+      return;
+    }
+    if (row.open) {
+      state.openDevices.add(key);
+    } else {
+      state.openDevices.delete(key);
+    }
+    saveOpenDevices();
+  }, true);
+
   window.addEventListener("hashchange", () => {
     state.route = routeFromHash();
+    localStorage.setItem(ROUTE_KEY, state.route);
     render();
   });
 
@@ -850,6 +1048,7 @@ function bindEvents() {
 
 function init() {
   state.route = routeFromHash();
+  localStorage.setItem(ROUTE_KEY, state.route);
   applyTheme();
   applyDensity();
   setIconContainers();

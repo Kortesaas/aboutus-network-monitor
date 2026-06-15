@@ -2,21 +2,22 @@
 
 Read-only local production-network dashboard for the ABOUTUS show network.
 
-## Current v0.3 scope
+## Current v0.4 scope
 
 - FastAPI backend with a static browser dashboard.
 - Editable network configuration in `config/network.yaml`.
 - Modern dark-default dashboard with Overview, Devices, Topology, and Settings views.
-- Persisted UI settings for System/Dark/Light theme, refresh interval, compact mode, and device visibility.
+- Persisted UI state for active page, device filters, VLAN collapse state, expanded device details, and dashboard settings.
 - Live status checks for:
   - LANCOM router
   - FOH Allied Telesis switch
-  - Stage TP-Link switch
+  - one or more stage switches
   - Internet probes
   - VLAN gateways
 - Manual inventory loaded from config and merged with safe subnet discovery.
 - Devices grouped by VLAN with search, VLAN/status/source/type filters, and expandable details.
-- Clean topology overview for Internet, router, switches, VLAN lanes, and warning state.
+- Compact Overview topology plus full Topology view for Internet, router, switches, VLAN lanes, and warning state.
+- Open-web-interface actions for infrastructure and devices with IP addresses.
 - Switch/port details display `Unknown` unless explicitly present in inventory or proven by a future collector.
 
 No router or switch configuration is changed. No packet capture or deep traffic inspection is included.
@@ -60,16 +61,55 @@ http://192.168.99.10:8080
 
 ## UI
 
-The v0.3 frontend is a lightweight static app with no external CDN dependencies. It keeps all data from the backend available, but uses progressive disclosure:
+The v0.4 frontend is a lightweight static app with no external CDN dependencies. It keeps all data from the backend available, but uses progressive disclosure:
 
-- Overview shows show-ready state, critical cards, warnings, and compact VLAN cards.
+- Overview shows show-ready state, critical cards, warnings, compact network path, and compact VLAN cards.
 - Devices provides search, filters, grouped VLAN sections, and expandable device details.
 - Topology shows the main Internet/router/switch path plus VLAN lanes.
 - Settings stores dashboard preferences in browser `localStorage`.
 
+The browser also stores the active page, device filters, collapsed VLAN groups, and expanded device details in `localStorage`, so automatic refreshes do not reset the working view.
+
 ## Configuration
 
 Edit `config/network.yaml` to add real manual inventory entries under `inventory`. Unknown values should be left blank or set to `Unknown`; the app will not infer switch ports or MAC addresses.
+
+Optional `web_url` fields can be added to infrastructure and inventory entries:
+
+```yaml
+inventory:
+  - name: "FOH Switch AT-GS950/48"
+    ip: "192.168.99.2"
+    vlan: "MGMT"
+    role: "switch"
+    expected: true
+    web_url: "http://192.168.99.2"
+```
+
+If `web_url` is not configured but an IP address is known, the API exposes a generated default of `http://<ip>`. The UI opens these links in a new browser tab and does not assume HTTPS unless it is configured.
+
+The current `infrastructure` list remains supported. v0.4 also accepts a future object-style shape with multiple stage switches:
+
+```yaml
+infrastructure:
+  router:
+    name: "LANCOM 1783VAW"
+    ip: "192.168.99.1"
+    role: "router"
+    web_url: "http://192.168.99.1"
+
+  foh_switch:
+    name: "FOH AT-GS950/48"
+    ip: "192.168.99.2"
+    role: "core-switch"
+    web_url: "http://192.168.99.2"
+
+  stage_switches:
+    - name: "Stage TL-SG1016PE"
+      ip: "192.168.99.3"
+      role: "stage-switch"
+      web_url: "http://192.168.99.3"
+```
 
 The config path can be overridden with:
 
@@ -79,7 +119,7 @@ export ABOUTUS_MONITOR_CONFIG=/path/to/network.yaml
 
 ## Discovery
 
-v0.2 can run a read-only `nmap -sn` ping sweep across all configured VLAN subnets. The collector:
+v0.4 can run a read-only `nmap -sn` ping sweep across all configured VLAN subnets. The collector:
 
 - uses no port scanning;
 - scans only subnets listed in `config/network.yaml`;

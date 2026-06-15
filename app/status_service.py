@@ -66,6 +66,66 @@ def _normalize_name(entry: dict[str, Any]) -> str | None:
     return entry.get("display_name") or entry.get("name")
 
 
+def _default_web_url(ip_address: Any) -> str | None:
+    if _known(ip_address) == UNKNOWN_LABEL:
+        return None
+    return f"http://{ip_address}"
+
+
+def _web_url(entry: dict[str, Any], ip_address: Any) -> tuple[str | None, str]:
+    configured = entry.get("web_url")
+    if configured:
+        return str(configured), "configured"
+
+    generated = _default_web_url(ip_address)
+    if generated:
+        return generated, "generated"
+
+    return None, UNKNOWN_LABEL
+
+
+def _normalize_infrastructure_entry(entry: dict[str, Any], fallback_id: str | None = None) -> dict[str, Any]:
+    prepared = dict(entry)
+    if "ip_address" not in prepared and "ip" in prepared:
+        prepared["ip_address"] = prepared["ip"]
+    if fallback_id and "id" not in prepared:
+        prepared["id"] = fallback_id.replace("_", "-")
+    if "check" not in prepared and prepared.get("ip_address"):
+        prepared["check"] = {"type": "ping"}
+    return prepared
+
+
+def _infrastructure_entries(config: dict[str, Any]) -> list[dict[str, Any]]:
+    configured = config.get("infrastructure") or []
+    if isinstance(configured, list):
+        return [_normalize_infrastructure_entry(entry) for entry in configured]
+
+    if not isinstance(configured, dict):
+        return []
+
+    entries: list[dict[str, Any]] = []
+    for key in ("router", "foh_switch"):
+        value = configured.get(key)
+        if isinstance(value, dict):
+            entries.append(_normalize_infrastructure_entry(value, key))
+
+    stage_switches = configured.get("stage_switches") or []
+    if isinstance(stage_switches, dict):
+        stage_switches = [stage_switches]
+    for index, entry in enumerate(stage_switches, start=1):
+        if isinstance(entry, dict):
+            fallback_id = entry.get("id") or f"stage-switch-{index}"
+            entries.append(_normalize_infrastructure_entry(entry, str(fallback_id)))
+
+    for key, value in configured.items():
+        if key in {"router", "foh_switch", "stage_switches"}:
+            continue
+        if isinstance(value, dict):
+            entries.append(_normalize_infrastructure_entry(value, key))
+
+    return entries
+
+
 def _vlan_lookup(vlans: list[dict[str, Any]]) -> tuple[dict[str, dict[str, Any]], list[tuple[ipaddress._BaseNetwork, dict[str, Any]]]]:
     by_name: dict[str, dict[str, Any]] = {}
     networks: list[tuple[ipaddress._BaseNetwork, dict[str, Any]]] = []
@@ -114,12 +174,15 @@ def _find_vlan_for_device(
 async def _infrastructure_status(entry: dict[str, Any], defaults: dict[str, Any]) -> dict[str, Any]:
     ip_address = entry.get("ip_address")
     check = await run_check(entry.get("check"), default_target=ip_address, defaults=defaults)
+    web_url, web_url_source = _web_url(entry, ip_address)
     return {
         "id": _known(entry.get("id")),
         "name": _known(entry.get("name")),
         "role": _known(entry.get("role")),
         "model": _known(entry.get("model")),
         "ip_address": _known(ip_address),
+        "web_url": _known(web_url),
+        "web_url_source": web_url_source,
         "vlan": _known(entry.get("vlan")),
         "status": check["status"],
         "check": check,
@@ -172,6 +235,7 @@ async def _manual_device_status(
     connection = entry.get("connection") or {}
     connected_switch = entry.get("connected_switch") or connection.get("switch_name")
     connected_port = entry.get("connected_port") or connection.get("switch_port")
+    web_url, web_url_source = _web_url(entry, ip_address)
 
     return {
         "id": _known(entry.get("id") or _slug(ip_address or _normalize_name(entry))),
@@ -184,6 +248,8 @@ async def _manual_device_status(
         "vlan_id": _known(vlan.get("id") or entry.get("vlan_id")),
         "subnet": _known(vlan.get("subnet")),
         "ip_address": _known(ip_address),
+        "web_url": _known(web_url),
+        "web_url_source": web_url_source,
         "mac_address": _known(entry.get("mac_address") or entry.get("mac")),
         "hostname": _known(entry.get("hostname")),
         "vendor": _known(entry.get("vendor")),
@@ -216,6 +282,8 @@ def _merge_device(base: dict[str, Any], incoming: dict[str, Any]) -> dict[str, A
         "connected_switch",
         "connected_port",
         "switch_port_confidence",
+        "web_url",
+        "web_url_source",
     }
     for key, value in incoming.items():
         if key in {"id", "ip_address", "discovery_sources"}:
@@ -245,6 +313,7 @@ def _normalize_discovered_device(
 ) -> dict[str, Any]:
     vlan = _find_vlan_for_device(entry, by_name, networks) or {}
     ip_address = _normalize_ip(entry)
+    web_url, web_url_source = _web_url(entry, ip_address)
     return {
         "id": _known(entry.get("id") or f"discovered-{ip_address}"),
         "name": _known(entry.get("name") or entry.get("hostname") or ip_address),
@@ -256,6 +325,8 @@ def _normalize_discovered_device(
         "vlan_id": _known(vlan.get("id") or entry.get("vlan_id")),
         "subnet": _known(vlan.get("subnet") or entry.get("subnet")),
         "ip_address": _known(ip_address),
+        "web_url": _known(web_url),
+        "web_url_source": web_url_source,
         "mac_address": _known(entry.get("mac_address") or entry.get("mac")),
         "hostname": _known(entry.get("hostname")),
         "vendor": _known(entry.get("vendor")),
@@ -372,6 +443,9 @@ def _apply_infrastructure_status(
                     str(infra.get("check", {}).get("source") or ""),
                 ]
             )
+            if _known(prepared.get("web_url")) == UNKNOWN_LABEL and _known(infra.get("web_url")) != UNKNOWN_LABEL:
+                prepared["web_url"] = infra["web_url"]
+                prepared["web_url_source"] = infra.get("web_url_source", "generated")
             if _status_rank(infra.get("status", UNKNOWN)) > _status_rank(prepared.get("status", UNKNOWN)):
                 prepared["status"] = infra["status"]
                 prepared["last_seen"] = (
@@ -466,6 +540,8 @@ def _build_topology(
             "role": item.get("role"),
             "status": item.get("status", UNKNOWN),
             "ip_address": item.get("ip_address"),
+            "web_url": item.get("web_url"),
+            "web_url_source": item.get("web_url_source"),
         }
         for item in infrastructure
     )
@@ -499,7 +575,7 @@ async def _build_snapshot_uncached() -> dict[str, Any]:
     defaults = config.get("check_defaults") or {}
 
     infrastructure, vlans, internet, discovery = await asyncio.gather(
-        asyncio.gather(*(_infrastructure_status(entry, defaults) for entry in config.get("infrastructure", []))),
+        asyncio.gather(*(_infrastructure_status(entry, defaults) for entry in _infrastructure_entries(config))),
         asyncio.gather(*(_vlan_status(entry, defaults) for entry in config.get("vlans", []))),
         _internet_status(config, defaults),
         discover_devices(config),
