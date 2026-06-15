@@ -465,6 +465,61 @@ button:disabled {
   padding: var(--pad);
 }
 
+.probe-check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.probe-check-card {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 72px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.probe-check-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.probe-check-main,
+.probe-check-meta {
+  min-width: 0;
+}
+
+.probe-check-main strong,
+.probe-check-main span,
+.probe-check-meta span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.probe-check-main span,
+.probe-check-meta span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.probe-check-meta {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+}
+
 .summary-icon {
   grid-area: icon;
 }
@@ -1262,8 +1317,14 @@ select {
 
 @media (max-width: 760px) {
   .site-header {
-    align-items: center;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 1fr;
+    gap: 0;
+    padding: 6px 8px;
+  }
+
+  .brand,
+  .header-actions {
+    display: none;
   }
 
   .page-heading,
@@ -1274,11 +1335,6 @@ select {
 
   .page-heading {
     flex-direction: column;
-  }
-
-  .header-actions {
-    flex-direction: row;
-    justify-content: flex-end;
   }
 
   .status-bar {
@@ -1301,41 +1357,39 @@ select {
     grid-column: 1 / -1;
   }
 
-  .primary-button {
-    flex: 0 0 42px;
-    width: 42px;
-    padding: 0;
-  }
-
-  #settingsButton,
-  #refreshButton span:last-child {
-    display: none;
-  }
-
   .nav-list {
     display: grid;
+    grid-column: 1;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 4px;
-    padding: 4px;
+    justify-self: stretch;
+    width: 100%;
+    gap: 2px;
+    padding: 0;
+    border: 0;
+    background: transparent;
   }
 
   .nav-item {
     justify-content: center;
-    gap: 3px;
-    min-height: 40px;
-    padding: 4px 2px;
-    font-size: 0.66rem;
+    min-height: 36px;
+    padding: 0 4px;
+    font-size: 0.74rem;
     line-height: 1;
     text-align: center;
     white-space: nowrap;
   }
 
   .nav-icon {
-    width: 16px;
-    height: 16px;
+    display: none;
+  }
+
+  .nav-item.active {
+    border-color: var(--border);
+    background: var(--surface);
   }
 
   .vlan-card-grid,
+  .probe-check-grid,
   .device-summary-strip,
   .settings-grid {
     grid-template-columns: 1fr;

@@ -51,6 +51,33 @@ need_systemctl() {
   fi
 }
 
+service_installed() {
+  systemctl cat "$SERVICE_NAME" >/dev/null 2>&1
+}
+
+require_service_installed() {
+  if service_installed; then
+    return
+  fi
+
+  cat >&2 <<EOF
+$SERVICE_NAME is not installed yet.
+
+Run this once to create, enable, and start the boot service:
+
+  ./aboutus-monitor install-service
+
+After that, these commands will work:
+
+  ./aboutus-monitor start
+  ./aboutus-monitor stop
+  ./aboutus-monitor restart
+  ./aboutus-monitor status
+  ./aboutus-monitor logs
+EOF
+  exit 1
+}
+
 setup() {
   cd "$PROJECT_DIR"
   if [[ ! -x "$VENV_DIR/bin/python" ]]; then
@@ -147,6 +174,8 @@ uninstall_service() {
 service_cmd() {
   need_systemctl
   local action="$1"
+  require_service_installed
+
   case "$action" in
     status)
       systemctl status "$SERVICE_NAME" --no-pager

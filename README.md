@@ -76,6 +76,12 @@ After installation, use the same helper for day-to-day control:
 ./aboutus-monitor start
 ```
 
+Normal app/UI edits do not require reinstalling the service. Use:
+
+- browser hard refresh for static UI/CSS/JS changes;
+- `./aboutus-monitor restart` for Python/backend changes;
+- `./aboutus-monitor install-service` only when installing for the first time or changing the service definition.
+
 To remove the boot service:
 
 ```bash

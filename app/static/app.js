@@ -68,6 +68,7 @@ function icon(name) {
     external: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3h7v7h-2V6.4l-8.3 8.3-1.4-1.4L17.6 5H14V3ZM5 5h7v2H7v10h10v-5h2v7H5V5Z"/></svg>',
     arrow: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5.6 19.4 12 13 18.4 11.6 17l4-4H4v-2h11.6l-4-4L13 5.6Z"/></svg>',
     internet: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm6.9 9h-3.1a15 15 0 0 0-1.1-5 8.1 8.1 0 0 1 4.2 5ZM12 4.1c.7 1 1.4 3.3 1.7 6.9h-3.4c.3-3.6 1-5.9 1.7-6.9ZM4.3 13h3.9c.1 1.7.4 3.3.8 4.7A8.1 8.1 0 0 1 4.3 13Zm3.9-2H4.3A8.1 8.1 0 0 1 9 6.3 18 18 0 0 0 8.2 11Zm3.8 8.9c-.7-1-1.4-3.3-1.7-6.9h3.4c-.3 3.6-1 5.9-1.7 6.9Zm3-2.2c.4-1.4.7-3 .8-4.7h3.9a8.1 8.1 0 0 1-4.7 4.7Z"/></svg>',
+    dns: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v6H4V4Zm2 2v2h12V6H6Zm-2 8h16v6H4v-6Zm2 2v2h12v-2H6Zm1-9h2v2H7V7Zm0 10h2v2H7v-2Zm5-4h2v2h-2v-2Zm0-3h2v3h-2v-3Z"/></svg>',
     router: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11h16v8H4v-8Zm2 2v4h12v-4H6Zm1 3h2v-2H7v2Zm4 0h2v-2h-2v2Zm7-9 1.4-1.4A10.5 10.5 0 0 0 12 2a10.5 10.5 0 0 0-7.4 3.1L6 6.5A8.5 8.5 0 0 1 12 4c2.3 0 4.4.9 6 3Zm-3 3 1.4-1.4A6.2 6.2 0 0 0 12 6.8c-1.7 0-3.2.7-4.4 1.8L9 10a4.3 4.3 0 0 1 6 0Z"/></svg>',
     switch: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v10H3V7Zm2 2v6h14V9H5Zm1 5h2v-2H6v2Zm3 0h2v-2H9v2Zm3 0h2v-2h-2v2Zm3 0h2v-2h-2v2ZM7 4h10v2H7V4Zm0 14h10v2H7v-2Z"/></svg>',
     command: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3a4 4 0 0 0-4 4v1h5V7a4 4 0 0 0-1-2.6V3Zm2 7H3v4h6v-4Zm2 0v4h2v-4h-2Zm4 0v4h6v-4h-6Zm1-2h5V7a4 4 0 0 0-4-4h-1v1.4A4 4 0 0 0 15 7v1ZM8 16H3v1a4 4 0 0 0 4 4h1v-5Zm8 0v5h1a4 4 0 0 0 4-4v-1h-5Z"/></svg>',
@@ -449,6 +450,37 @@ function summaryCard(label, value, status, iconName, caption = "", actionItem = 
   ]);
 }
 
+function dnsProbes(data) {
+  return (data.internet?.probes || []).filter((probe) => normalize(probe.name).includes("dns"));
+}
+
+function dnsProbeCard(probe) {
+  const check = probe.check || {};
+  const latency = check.latency_ms !== null && check.latency_ms !== undefined ? `${check.latency_ms} ms` : "Unknown";
+  return el("article", { className: "probe-check-card" }, [
+    el("span", { className: "probe-check-icon", html: icon("dns") }),
+    el("div", { className: "probe-check-main" }, [
+      el("strong", { text: text(probe.name) }),
+      el("span", { text: text(check.target) }),
+    ]),
+    el("div", { className: "probe-check-meta" }, [
+      el("span", { text: latency }),
+      statusPill(probe.status),
+    ]),
+  ]);
+}
+
+function dnsChecksPanel(data) {
+  const probes = dnsProbes(data);
+  if (probes.length === 0) {
+    return null;
+  }
+  return el("section", { className: "panel" }, [
+    sectionTitle("DNS Servers"),
+    el("div", { className: "probe-check-grid" }, probes.map(dnsProbeCard)),
+  ]);
+}
+
 function aggregateStatus(items) {
   const present = items.filter(Boolean);
   if (present.length === 0) return "unknown";
@@ -505,6 +537,7 @@ function renderOverview(data) {
     summaryCard("VLAN Gateways", `${gatewayOnline}/${vlans.length} Online`, gatewayOnline === vlans.length ? "online" : "warning", "shield"),
     summaryCard("Devices", `${devices.length} discovered`, countByStatus(devices, "offline") > 0 ? "warning" : "online", "devices", `${countByStatus(devices, "online")} online`),
   ]);
+  const dnsChecks = dnsChecksPanel(data);
 
   const compactTopology = el("section", { className: "panel" }, [
     sectionTitle("Network Path"),
@@ -517,7 +550,7 @@ function renderOverview(data) {
     el("div", { className: "vlan-card-grid" }, (data.devices_by_vlan || []).map((group) => vlanSummaryCard(group, data))),
   ]);
 
-  elements.pageContent.append(hero, warnings, summary, compactTopology, vlanCards);
+  elements.pageContent.append(...[hero, warnings, summary, dnsChecks, compactTopology, vlanCards].filter(Boolean));
 }
 
 function overviewTopologyGraph(data) {
