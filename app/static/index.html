@@ -7,82 +7,62 @@
     <link rel="stylesheet" href="/static/styles.css">
   </head>
   <body>
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">ABOUTUS Network Monitor</p>
-        <h1 id="stationName">Loading</h1>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">A</div>
+          <div>
+            <p class="eyebrow">ABOUTUS</p>
+            <h1>Network Monitor</h1>
+          </div>
+        </div>
+
+        <nav class="nav-list">
+          <button class="nav-item active" type="button" data-route="overview">
+            <span class="nav-icon" data-icon="dashboard"></span>
+            <span>Overview</span>
+          </button>
+          <button class="nav-item" type="button" data-route="devices">
+            <span class="nav-icon" data-icon="devices"></span>
+            <span>Devices</span>
+          </button>
+          <button class="nav-item" type="button" data-route="topology">
+            <span class="nav-icon" data-icon="topology"></span>
+            <span>Topology</span>
+          </button>
+          <button class="nav-item" type="button" data-route="settings">
+            <span class="nav-icon" data-icon="settings"></span>
+            <span>Settings</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <span id="stationBadge" class="soft-badge">Loading</span>
+        </div>
+      </aside>
+
+      <div class="main-shell">
+        <header class="topbar">
+          <div>
+            <p id="pageKicker" class="eyebrow">Overview</p>
+            <h2 id="pageTitle">Live Production Network</h2>
+            <p id="pageSubtitle" class="muted">Waiting for first status snapshot</p>
+          </div>
+          <div class="toolbar">
+            <span id="lastUpdated" class="timestamp">Not updated yet</span>
+            <button id="settingsButton" class="icon-button" type="button" aria-label="Open settings" title="Open settings">
+              <span data-icon="settings"></span>
+            </button>
+            <button id="refreshButton" class="primary-button" type="button">
+              <span data-icon="refresh"></span>
+              <span>Refresh</span>
+            </button>
+          </div>
+        </header>
+
+        <main id="pageContent" class="content" tabindex="-1"></main>
       </div>
-      <div class="topbar-actions">
-        <span id="lastUpdated" class="timestamp">Waiting for status</span>
-        <button id="refreshButton" type="button">Refresh</button>
-      </div>
-    </header>
-
-    <main>
-      <section class="summary-grid" id="summaryGrid" aria-label="Network status summary"></section>
-
-      <section class="panel">
-        <div class="section-header">
-          <h2>Infrastructure</h2>
-        </div>
-        <div id="infrastructureGrid" class="status-grid"></div>
-      </section>
-
-      <section class="panel">
-        <div class="section-header">
-          <h2>Internet</h2>
-        </div>
-        <div id="internetGrid" class="status-grid"></div>
-      </section>
-
-      <section class="panel">
-        <div class="section-header">
-          <h2>VLAN Gateways</h2>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>VLAN</th>
-                <th>Subnet</th>
-                <th>Gateway</th>
-                <th>Status</th>
-                <th>Latency</th>
-                <th>Checked</th>
-              </tr>
-            </thead>
-            <tbody id="vlanTable"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="panel">
-        <div class="section-header">
-          <h2>Manual Inventory</h2>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Device</th>
-                <th>VLAN</th>
-                <th>IP</th>
-                <th>MAC</th>
-                <th>Hostname</th>
-                <th>Vendor</th>
-                <th>Status</th>
-                <th>Last Seen</th>
-                <th>Source</th>
-                <th>Switch</th>
-                <th>Port</th>
-                <th>Port State</th>
-              </tr>
-            </thead>
-            <tbody id="deviceTable"></tbody>
-          </table>
-        </div>
-      </section>
-    </main>
+    </div>
 
     <script src="/static/app.js" defer></script>
   </body>

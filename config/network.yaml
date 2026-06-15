@@ -7,6 +7,16 @@ check_defaults:
   timeout_seconds: 1.5
   ping_count: 1
 
+discovery:
+  enabled: true
+  tool: nmap
+  scan_interval_seconds: 60
+  timeout_seconds_per_subnet: 15
+  resolve_dns: false
+  max_retries: 1
+  host_timeout: 5s
+  max_parallel_scans: 2
+
 infrastructure:
   - id: lancom-router
     name: LANCOM 1783VAW
@@ -73,67 +83,72 @@ vlans:
     subnet: 192.168.99.0/24
     gateway: 192.168.99.1
 
-manual_inventory:
+inventory:
   - id: aboutus-pi
-    display_name: ABOUTUS Network Monitor Pi
+    name: ABOUTUS Network Monitor Pi
+    ip: 192.168.99.10
     vlan: MGMT
-    ip_address: 192.168.99.10
-    mac_address:
+    role: monitor
+    expected: true
     hostname: aboutus-network-monitor
     vendor: Raspberry Pi
+    mac_address:
+    connected_switch: Unknown
+    connected_port: Unknown
+    mac_source: Unknown
+    switch_port_confidence: Unknown
     discovery_sources:
-      - manual_inventory
+      - inventory
     status_check:
       type: ping
-    connection:
-      switch_name: Unknown
-      switch_port: Unknown
-      port_state: Unknown
 
   - id: lancom-router
-    display_name: LANCOM 1783VAW
+    name: LANCOM Router
+    ip: 192.168.99.1
     vlan: MGMT
-    ip_address: 192.168.99.1
-    mac_address:
-    hostname:
+    role: router
+    expected: true
     vendor: LANCOM Systems
+    mac_address:
+    connected_switch: Unknown
+    connected_port: Unknown
+    mac_source: Unknown
+    switch_port_confidence: Unknown
     discovery_sources:
-      - manual_inventory
+      - inventory
     status_check:
       type: ping
-    connection:
-      switch_name: Unknown
-      switch_port: Unknown
-      port_state: Unknown
 
   - id: foh-switch
-    display_name: FOH AT-GS950/48
+    name: FOH Switch AT-GS950/48
+    ip: 192.168.99.2
     vlan: MGMT
-    ip_address: 192.168.99.2
-    mac_address:
-    hostname:
+    role: switch
+    expected: true
     vendor: Allied Telesis
+    mac_address:
+    connected_switch: Unknown
+    connected_port: Unknown
+    mac_source: Unknown
+    switch_port_confidence: Unknown
     discovery_sources:
-      - manual_inventory
+      - inventory
     status_check:
       type: ping
-    connection:
-      switch_name: Unknown
-      switch_port: Unknown
-      port_state: Unknown
 
   - id: stage-switch
-    display_name: Stage TL-SG1016PE
+    name: Stage Switch TL-SG1016PE
+    ip: 192.168.99.3
     vlan: MGMT
-    ip_address: 192.168.99.3
-    mac_address:
-    hostname:
+    role: switch
+    expected: true
     vendor: TP-Link
+    mac_address:
+    connected_switch: Unknown
+    connected_port: Unknown
+    mac_source: Unknown
+    switch_port_confidence: Unknown
     discovery_sources:
-      - manual_inventory
+      - inventory
     status_check:
       type: ping
-    connection:
-      switch_name: Unknown
-      switch_port: Unknown
-      port_state: Unknown
