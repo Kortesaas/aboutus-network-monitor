@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .config import ConfigError
@@ -29,6 +29,19 @@ async def dashboard() -> FileResponse:
 @app.head("/", include_in_schema=False)
 async def dashboard_head() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon() -> Response:
+    return Response(
+        content=(STATIC_DIR / "favicon.svg").read_text(encoding="utf-8"),
+        media_type="image/svg+xml",
+    )
+
+
+@app.head("/favicon.ico", include_in_schema=False)
+async def favicon_head() -> Response:
+    return Response(media_type="image/svg+xml")
 
 
 @app.get("/healthz")
