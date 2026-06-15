@@ -1,0 +1,15 @@
+[project]
+name = "aboutus-network-monitor"
+version = "0.1.0"
+description = "Read-only local network dashboard for the ABOUTUS production network."
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.30,<1",
+  "PyYAML>=6.0,<7",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8,<9",
+]

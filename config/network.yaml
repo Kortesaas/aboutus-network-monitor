@@ -1,0 +1,139 @@
+station:
+  name: aboutus-network-monitor
+  ip_address: 192.168.99.10
+  vlan: MGMT
+
+check_defaults:
+  timeout_seconds: 1.5
+  ping_count: 1
+
+infrastructure:
+  - id: lancom-router
+    name: LANCOM 1783VAW
+    role: Router
+    model: LANCOM 1783VAW
+    ip_address: 192.168.99.1
+    vlan: MGMT
+    check:
+      type: ping
+
+  - id: foh-switch
+    name: FOH AT-GS950/48
+    role: FOH core switch
+    model: Allied Telesis AT-GS950/48
+    ip_address: 192.168.99.2
+    vlan: MGMT
+    check:
+      type: ping
+
+  - id: stage-switch
+    name: Stage TL-SG1016PE
+    role: Stage switch
+    model: TP-Link TL-SG1016PE
+    ip_address: 192.168.99.3
+    vlan: MGMT
+    check:
+      type: ping
+
+internet:
+  probes:
+    - name: Cloudflare DNS
+      type: ping
+      target: 1.1.1.1
+    - name: Google DNS
+      type: ping
+      target: 8.8.8.8
+    - name: HTTPS probe
+      type: https
+      target: https://www.google.com/generate_204
+
+vlans:
+  - id: 10
+    name: CONTROL
+    subnet: 192.168.10.0/24
+    gateway: 192.168.10.1
+  - id: 20
+    name: AUDIO
+    subnet: 192.168.20.0/24
+    gateway: 192.168.20.1
+  - id: 30
+    name: LASER
+    subnet: 192.168.30.0/24
+    gateway: 192.168.30.1
+  - id: 40
+    name: LIGHTING
+    subnet: 192.168.40.0/24
+    gateway: 192.168.40.1
+  - id: 50
+    name: VIDEO
+    subnet: 192.168.50.0/24
+    gateway: 192.168.50.1
+  - id: 99
+    name: MGMT
+    subnet: 192.168.99.0/24
+    gateway: 192.168.99.1
+
+manual_inventory:
+  - id: aboutus-pi
+    display_name: ABOUTUS Network Monitor Pi
+    vlan: MGMT
+    ip_address: 192.168.99.10
+    mac_address:
+    hostname: aboutus-network-monitor
+    vendor: Raspberry Pi
+    discovery_sources:
+      - manual_inventory
+    status_check:
+      type: ping
+    connection:
+      switch_name: Unknown
+      switch_port: Unknown
+      port_state: Unknown
+
+  - id: lancom-router
+    display_name: LANCOM 1783VAW
+    vlan: MGMT
+    ip_address: 192.168.99.1
+    mac_address:
+    hostname:
+    vendor: LANCOM Systems
+    discovery_sources:
+      - manual_inventory
+    status_check:
+      type: ping
+    connection:
+      switch_name: Unknown
+      switch_port: Unknown
+      port_state: Unknown
+
+  - id: foh-switch
+    display_name: FOH AT-GS950/48
+    vlan: MGMT
+    ip_address: 192.168.99.2
+    mac_address:
+    hostname:
+    vendor: Allied Telesis
+    discovery_sources:
+      - manual_inventory
+    status_check:
+      type: ping
+    connection:
+      switch_name: Unknown
+      switch_port: Unknown
+      port_state: Unknown
+
+  - id: stage-switch
+    display_name: Stage TL-SG1016PE
+    vlan: MGMT
+    ip_address: 192.168.99.3
+    mac_address:
+    hostname:
+    vendor: TP-Link
+    discovery_sources:
+      - manual_inventory
+    status_check:
+      type: ping
+    connection:
+      switch_name: Unknown
+      switch_port: Unknown
+      port_state: Unknown

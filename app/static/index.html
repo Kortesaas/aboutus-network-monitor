@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ABOUTUS Network Monitor</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">ABOUTUS Network Monitor</p>
+        <h1 id="stationName">Loading</h1>
+      </div>
+      <div class="topbar-actions">
+        <span id="lastUpdated" class="timestamp">Waiting for status</span>
+        <button id="refreshButton" type="button">Refresh</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="summary-grid" id="summaryGrid" aria-label="Network status summary"></section>
+
+      <section class="panel">
+        <div class="section-header">
+          <h2>Infrastructure</h2>
+        </div>
+        <div id="infrastructureGrid" class="status-grid"></div>
+      </section>
+
+      <section class="panel">
+        <div class="section-header">
+          <h2>Internet</h2>
+        </div>
+        <div id="internetGrid" class="status-grid"></div>
+      </section>
+
+      <section class="panel">
+        <div class="section-header">
+          <h2>VLAN Gateways</h2>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>VLAN</th>
+                <th>Subnet</th>
+                <th>Gateway</th>
+                <th>Status</th>
+                <th>Latency</th>
+                <th>Checked</th>
+              </tr>
+            </thead>
+            <tbody id="vlanTable"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-header">
+          <h2>Manual Inventory</h2>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Device</th>
+                <th>VLAN</th>
+                <th>IP</th>
+                <th>MAC</th>
+                <th>Hostname</th>
+                <th>Vendor</th>
+                <th>Status</th>
+                <th>Last Seen</th>
+                <th>Source</th>
+                <th>Switch</th>
+                <th>Port</th>
+                <th>Port State</th>
+              </tr>
+            </thead>
+            <tbody id="deviceTable"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>
