@@ -52,6 +52,54 @@ Then open:
 http://192.168.99.10:8080
 ```
 
+## Reverse proxy URL
+
+The dashboard can also be served through local nginx on port `80`, so browsers do not need `:8080`.
+
+- Direct app URL: `http://192.168.99.10:8080`
+- Pretty URL via nginx: `http://aboutus-net`
+- Alternate local URL: `http://aboutus-net.intern`
+- IP URL via nginx: `http://192.168.99.10`
+
+nginx listens on port `80` and reverse-proxies requests to the app on `127.0.0.1:8080`. This is a local HTTP reverse proxy only; HTTPS is not configured.
+
+Install or update the nginx proxy config:
+
+```bash
+cd /home/aboutus/aboutus-network-monitor
+./aboutus-monitor install-nginx
+```
+
+Check and reload nginx manually:
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+The nginx site installed by the helper is:
+
+```nginx
+server {
+    listen 80;
+    server_name aboutus-net aboutus-net.intern 192.168.99.10;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 30s;
+        proxy_read_timeout 30s;
+    }
+}
+```
+
 ## Start on boot
 
 Use the project helper to install the systemd boot service:

@@ -20,6 +20,7 @@ Usage:
   ./aboutus-monitor serve              Same as run; used by systemd
   ./aboutus-monitor install-service    Install, enable, and start the boot service
   ./aboutus-monitor uninstall-service  Stop, disable, and remove the boot service
+  ./aboutus-monitor install-nginx      Install/configure nginx reverse proxy on port 80
   ./aboutus-monitor start              Start the systemd service
   ./aboutus-monitor stop               Stop the systemd service
   ./aboutus-monitor restart            Restart the systemd service
@@ -109,6 +110,70 @@ service_user() {
   else
     id -un
   fi
+}
+
+nginx_site_config() {
+  cat <<'EOF'
+server {
+    listen 80;
+    server_name aboutus-net aboutus-net.intern 192.168.99.10;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 30s;
+        proxy_read_timeout 30s;
+    }
+}
+EOF
+}
+
+install_nginx_proxy() {
+  if ! command -v apt-get >/dev/null 2>&1; then
+    echo "apt-get is not available; install nginx manually, then re-run this command." >&2
+    exit 1
+  fi
+
+  if ! command -v nginx >/dev/null 2>&1; then
+    sudo_cmd apt-get update
+    sudo_cmd apt-get install -y nginx
+  fi
+
+  local site_name="aboutus-network-monitor"
+  local tmp_site
+  tmp_site="$(mktemp)"
+  nginx_site_config >"$tmp_site"
+
+  sudo_cmd install -m 0644 "$tmp_site" "/etc/nginx/sites-available/$site_name"
+  rm -f "$tmp_site"
+  sudo_cmd mkdir -p /etc/nginx/sites-enabled
+  sudo_cmd ln -sfn "/etc/nginx/sites-available/$site_name" "/etc/nginx/sites-enabled/$site_name"
+
+  if [[ -e /etc/nginx/sites-enabled/default ]]; then
+    sudo_cmd rm -f /etc/nginx/sites-enabled/default
+  fi
+
+  sudo_cmd nginx -t
+  sudo_cmd systemctl enable nginx
+  sudo_cmd systemctl reload nginx || sudo_cmd systemctl restart nginx
+
+  echo
+  echo "Testing nginx reverse proxy:"
+  curl -fsS -I http://127.0.0.1 | sed -n '1,5p'
+  curl -fsS -I http://aboutus-net | sed -n '1,5p'
+  curl -fsS -I http://aboutus-net.intern | sed -n '1,5p'
+  curl -fsS -I http://192.168.99.10 | sed -n '1,5p'
+
+  echo
+  echo "nginx reverse proxy installed."
+  echo "Open http://aboutus-net or http://aboutus-net.intern"
 }
 
 install_service() {
@@ -223,6 +288,9 @@ case "$command" in
     ;;
   uninstall-service)
     uninstall_service
+    ;;
+  install-nginx|install-nginx-proxy)
+    install_nginx_proxy
     ;;
   start|stop|restart|status|logs)
     service_cmd "$command"
