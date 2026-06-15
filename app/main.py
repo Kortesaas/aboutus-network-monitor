@@ -7,14 +7,14 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .config import ConfigError
-from .status_service import build_devices, build_status, build_topology
+from .status_service import build_devices, build_history, build_status, build_topology
 
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 app = FastAPI(
     title="ABOUTUS Network Monitor",
-    version="0.5.0",
+    version="0.6.0",
     docs_url="/api/docs",
     redoc_url=None,
 )
@@ -50,9 +50,9 @@ async def healthz() -> dict[str, str]:
 
 
 @app.get("/api/status")
-async def api_status() -> dict:
+async def api_status(refresh: bool = False) -> dict:
     try:
-        return await build_status()
+        return await build_status(force_refresh=refresh)
     except ConfigError as exc:
         return {
             "generated_at": None,
@@ -69,9 +69,9 @@ async def api_status() -> dict:
 
 
 @app.get("/api/devices")
-async def api_devices() -> dict:
+async def api_devices(refresh: bool = False) -> dict:
     try:
-        return await build_devices()
+        return await build_devices(force_refresh=refresh)
     except ConfigError as exc:
         return {
             "generated_at": None,
@@ -83,12 +83,24 @@ async def api_devices() -> dict:
 
 
 @app.get("/api/topology")
-async def api_topology() -> dict:
+async def api_topology(refresh: bool = False) -> dict:
     try:
-        return await build_topology()
+        return await build_topology(force_refresh=refresh)
     except ConfigError as exc:
         return {
             "generated_at": None,
             "topology": {"nodes": [], "links": [], "warnings": []},
+            "error": str(exc),
+        }
+
+
+@app.get("/api/history")
+async def api_history(refresh: bool = False) -> dict:
+    try:
+        return await build_history(force_refresh=refresh)
+    except ConfigError as exc:
+        return {
+            "generated_at": None,
+            "history": {"events": [], "latest_snapshot": {}, "device_totals": {}},
             "error": str(exc),
         }

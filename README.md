@@ -2,7 +2,7 @@
 
 Read-only local production-network dashboard for the ABOUTUS show network.
 
-## Current v0.5 scope
+## Current v0.6 scope
 
 - FastAPI backend with a static browser dashboard.
 - Editable network configuration in `config/network.yaml`.
@@ -18,6 +18,8 @@ Read-only local production-network dashboard for the ABOUTUS show network.
 - Manual inventory loaded from config and merged with safe subnet discovery.
 - Devices grouped by VLAN with search, VLAN/status/source/type filters, explicit expand icons, and expandable details.
 - Compact Overview topology plus full Topology view for Internet, router, switches, VLAN lanes, and warning state.
+- SQLite-backed device history, first-seen/last-seen continuity, and recent status-change events.
+- Overview operator panels for problem devices, recent events, and quick device filters.
 - Open-web-interface actions for infrastructure and devices with IP addresses.
 - Switch/port details display `Unknown` unless explicitly present in inventory or proven by a future collector.
 
@@ -32,10 +34,13 @@ app/
   config.py          YAML config loader
   discovery.py       Safe nmap ping-sweep discovery collector
   main.py            FastAPI app and routes
+  storage.py         SQLite persistence for snapshots, device state, and events
   status_service.py  Builds the dashboard status payload
   static/            Browser UI assets
 config/
   network.yaml       Editable network and inventory config
+data/
+  monitor.sqlite3    Local generated history database, ignored by git
 ```
 
 ## Run locally on the Raspberry Pi
@@ -120,6 +125,7 @@ After installation, use the same helper for day-to-day control:
 ./aboutus-monitor restart
 ./aboutus-monitor logs
 ./aboutus-monitor health
+./aboutus-monitor history
 ./aboutus-monitor stop
 ./aboutus-monitor start
 ```
@@ -141,20 +147,43 @@ To remove the boot service:
 - `GET /api/status` returns the complete dashboard snapshot.
 - `GET /api/devices` returns all known/discovered devices and VLAN groups.
 - `GET /api/topology` returns the visual topology payload.
+- `GET /api/history` returns recent device events and persisted snapshot totals.
 - `GET /api/docs` shows the FastAPI-generated OpenAPI docs.
 
 ## UI
 
-The v0.5 frontend is a lightweight static app with no external CDN dependencies. It keeps all data from the backend available, but uses progressive disclosure:
+The v0.6 frontend is a lightweight static app with no external CDN dependencies. It keeps all data from the backend available, but uses progressive disclosure:
 
-- Overview shows show-ready state, critical cards, warnings, compact network path, and compact VLAN cards.
-- Devices provides search, filters, grouped VLAN sections, and expandable device details with visible chevron affordances.
+- Overview shows show-ready state, critical cards, problem devices, recent events, DNS checks, compact network path, and compact VLAN cards.
+- Devices provides search, filters, grouped VLAN sections, and expandable device details with visible chevron affordances and persisted history fields.
 - Topology shows the main Internet/router/switch path plus VLAN lanes.
 - Settings stores dashboard preferences in browser `localStorage`.
 
 The UI uses fixed grid tracks, wrapping controls, and compact action buttons so labels, status pills, and web-interface buttons do not overlap on desktop or tablet-sized screens.
 
 The browser also stores the active page, device filters, collapsed VLAN groups, and expanded device details in `localStorage`, so automatic refreshes do not reset the working view.
+
+The browser refresh button and automatic dashboard refresh call `/api/status?refresh=true`, which bypasses the backend cache and runs a fresh read-only discovery pass. This keeps Recent Events useful for device join/leave changes.
+
+## History Database
+
+v0.6 writes a local SQLite database to `data/monitor.sqlite3`. It stores:
+
+- recent dashboard snapshot totals;
+- per-device first seen, last seen, last checked, previous status, last status change, and offline-since fields;
+- recent device events such as joined, left, proven VLAN moved, IP changed, offline, unknown, and recovered.
+
+The database is local generated state and is ignored by git. Override its location with:
+
+```bash
+export ABOUTUS_MONITOR_DB=/path/to/monitor.sqlite3
+```
+
+Show recent events from SSH:
+
+```bash
+./aboutus-monitor history
+```
 
 ## Configuration
 
@@ -205,7 +234,7 @@ export ABOUTUS_MONITOR_CONFIG=/path/to/network.yaml
 
 ## Discovery
 
-v0.5 can run a read-only `nmap -sn` ping sweep across all configured VLAN subnets. The collector:
+v0.6 can run a read-only `nmap -sn` ping sweep across all configured VLAN subnets. The collector:
 
 - uses no port scanning;
 - scans only subnets listed in `config/network.yaml`;
@@ -216,6 +245,8 @@ v0.5 can run a read-only `nmap -sn` ping sweep across all configured VLAN subnet
 
 If `nmap` is missing, fails, or a subnet is unreachable, the API still returns a dashboard payload with discovery warnings.
 
+Devices must answer the current read-only host-discovery method to appear automatically. If a client joins a VLAN but blocks ping/host-discovery probes, it may not show up until router ARP/DHCP or SNMP correlation is added.
+
 Install nmap on Raspberry Pi OS if needed:
 
 ```bash
@@ -224,7 +255,7 @@ sudo apt install nmap
 
 ## Next milestones
 
-1. Add SQLite persistence for inventory snapshots and last-seen history.
-2. Add SNMP polling for real switch uptime, port state, speed, counters, errors, and bridge/MAC forwarding tables.
-3. Correlate IP to MAC using router ARP/DHCP/SNMP where possible.
-4. Correlate discovered MAC addresses with forwarding tables to show exact switch/port when proven.
+1. Add SNMP polling for real switch uptime, port state, speed, counters, errors, and bridge/MAC forwarding tables.
+2. Correlate IP to MAC using router ARP/DHCP/SNMP where possible.
+3. Correlate discovered MAC addresses with forwarding tables to show exact switch/port when proven.
+4. Add alert acknowledgement/mute controls for expected maintenance windows.

@@ -1,6 +1,6 @@
 [project]
 name = "aboutus-network-monitor"
-version = "0.1.0"
+version = "0.6.0"
 description = "Read-only local network dashboard for the ABOUTUS production network."
 requires-python = ">=3.11"
 dependencies = [

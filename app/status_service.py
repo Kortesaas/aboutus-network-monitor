@@ -8,6 +8,7 @@ from typing import Any
 from .checks import OFFLINE, ONLINE, UNKNOWN, run_check, utc_now
 from .config import load_config
 from .discovery import discover_devices, discovery_cache_ttl
+from .storage import history_payload, persist_snapshot
 
 
 UNKNOWN_LABEL = "Unknown"
@@ -570,6 +571,25 @@ def _build_topology(
     return {"nodes": nodes, "links": links, "warnings": warnings}
 
 
+def _persist_snapshot_safely(snapshot: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return persist_snapshot(snapshot)
+    except Exception as exc:
+        snapshot.setdefault("warnings", []).append(
+            {
+                "severity": "warning",
+                "message": f"History database unavailable: {exc}",
+            }
+        )
+        snapshot["history"] = {
+            "events": [],
+            "latest_snapshot": {},
+            "device_totals": {},
+            "error": str(exc),
+        }
+        return snapshot
+
+
 async def _build_snapshot_uncached() -> dict[str, Any]:
     config = load_config()
     defaults = config.get("check_defaults") or {}
@@ -619,17 +639,18 @@ async def build_snapshot(force_refresh: bool = False) -> dict[str, Any]:
         config = load_config()
         ttl = discovery_cache_ttl(config)
         snapshot = await _build_snapshot_uncached()
+        snapshot = _persist_snapshot_safely(snapshot)
         _SNAPSHOT_CACHE = snapshot
         _SNAPSHOT_EXPIRES_AT = time.monotonic() + ttl
         return snapshot
 
 
-async def build_status() -> dict[str, Any]:
-    return await build_snapshot()
+async def build_status(force_refresh: bool = False) -> dict[str, Any]:
+    return await build_snapshot(force_refresh=force_refresh)
 
 
-async def build_devices() -> dict[str, Any]:
-    snapshot = await build_snapshot()
+async def build_devices(force_refresh: bool = False) -> dict[str, Any]:
+    snapshot = await build_snapshot(force_refresh=force_refresh)
     return {
         "generated_at": snapshot["generated_at"],
         "devices": snapshot["devices"],
@@ -638,9 +659,17 @@ async def build_devices() -> dict[str, Any]:
     }
 
 
-async def build_topology() -> dict[str, Any]:
-    snapshot = await build_snapshot()
+async def build_topology(force_refresh: bool = False) -> dict[str, Any]:
+    snapshot = await build_snapshot(force_refresh=force_refresh)
     return {
         "generated_at": snapshot["generated_at"],
         "topology": snapshot["topology"],
+    }
+
+
+async def build_history(force_refresh: bool = False) -> dict[str, Any]:
+    snapshot = await build_snapshot(force_refresh=force_refresh)
+    return {
+        "generated_at": snapshot["generated_at"],
+        "history": snapshot.get("history") or history_payload(),
     }

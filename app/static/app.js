@@ -1,4 +1,4 @@
-const APP_VERSION = "0.5.0";
+const APP_VERSION = "0.6.0";
 const SETTINGS_KEY = "aboutus-network-monitor-ui-settings-v3";
 const COLLAPSE_KEY = "aboutus-network-monitor-collapsed-vlans-v3";
 const OPEN_DEVICES_KEY = "aboutus-network-monitor-open-devices-v4";
@@ -54,6 +54,8 @@ const state = {
   collapsedVlans: loadCollapsedVlans(),
   openDevices: loadOpenDevices(),
   filters: loadFilters(),
+  seenEventKeys: new Set(),
+  eventListInitialized: false,
 };
 
 function icon(name) {
@@ -69,6 +71,8 @@ function icon(name) {
     arrow: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5.6 19.4 12 13 18.4 11.6 17l4-4H4v-2h11.6l-4-4L13 5.6Z"/></svg>',
     internet: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm6.9 9h-3.1a15 15 0 0 0-1.1-5 8.1 8.1 0 0 1 4.2 5ZM12 4.1c.7 1 1.4 3.3 1.7 6.9h-3.4c.3-3.6 1-5.9 1.7-6.9ZM4.3 13h3.9c.1 1.7.4 3.3.8 4.7A8.1 8.1 0 0 1 4.3 13Zm3.9-2H4.3A8.1 8.1 0 0 1 9 6.3 18 18 0 0 0 8.2 11Zm3.8 8.9c-.7-1-1.4-3.3-1.7-6.9h3.4c-.3 3.6-1 5.9-1.7 6.9Zm3-2.2c.4-1.4.7-3 .8-4.7h3.9a8.1 8.1 0 0 1-4.7 4.7Z"/></svg>',
     dns: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v6H4V4Zm2 2v2h12V6H6Zm-2 8h16v6H4v-6Zm2 2v2h12v-2H6Zm1-9h2v2H7V7Zm0 10h2v2H7v-2Zm5-4h2v2h-2v-2Zm0-3h2v3h-2v-3Z"/></svg>',
+    history: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 1-8.5 6H1l3.5-4L8 9H5.6A7 7 0 1 0 12 5v4l4 2-1 1.7-5-2.9V3h2Z"/></svg>',
+    alert: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 1.7 20h20.6L12 2Zm0 4 6.8 12H5.2L12 6Zm-1 4h2v4h-2v-4Zm0 5h2v2h-2v-2Z"/></svg>',
     router: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11h16v8H4v-8Zm2 2v4h12v-4H6Zm1 3h2v-2H7v2Zm4 0h2v-2h-2v2Zm7-9 1.4-1.4A10.5 10.5 0 0 0 12 2a10.5 10.5 0 0 0-7.4 3.1L6 6.5A8.5 8.5 0 0 1 12 4c2.3 0 4.4.9 6 3Zm-3 3 1.4-1.4A6.2 6.2 0 0 0 12 6.8c-1.7 0-3.2.7-4.4 1.8L9 10a4.3 4.3 0 0 1 6 0Z"/></svg>',
     switch: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v10H3V7Zm2 2v6h14V9H5Zm1 5h2v-2H6v2Zm3 0h2v-2H9v2Zm3 0h2v-2h-2v2Zm3 0h2v-2h-2v2ZM7 4h10v2H7V4Zm0 14h10v2H7v-2Z"/></svg>',
     command: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3a4 4 0 0 0-4 4v1h5V7a4 4 0 0 0-1-2.6V3Zm2 7H3v4h6v-4Zm2 0v4h2v-4h-2Zm4 0v4h6v-4h-6Zm1-2h5V7a4 4 0 0 0-4-4h-1v1.4A4 4 0 0 0 15 7v1ZM8 16H3v1a4 4 0 0 0 4 4h1v-5Zm8 0v5h1a4 4 0 0 0 4-4v-1h-5Z"/></svg>',
@@ -186,6 +190,41 @@ function formatTime(value) {
   }
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? text(value) : date.toLocaleString();
+}
+
+function formatRelativeTime(value) {
+  if (!value || isUnknown(value)) {
+    return "Unknown";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return text(value);
+  }
+  const seconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+function formatEventTimestamp(value) {
+  if (!value || isUnknown(value)) {
+    return "Unknown";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return text(value);
+  }
+  return date.toLocaleString([], {
+    year: "2-digit",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
 }
 
 function clearNode(node) {
@@ -325,7 +364,7 @@ function scheduleNextRefresh() {
   const interval = refreshIntervalMs();
   state.refreshCycleStartedAt = Date.now();
   state.nextRefreshAt = state.refreshCycleStartedAt + interval;
-  state.refreshTimer = window.setTimeout(() => loadStatus({ preserveScroll: true }), interval);
+  state.refreshTimer = window.setTimeout(() => loadStatus({ preserveScroll: true, forceRefresh: true }), interval);
   updateStatusBar();
 }
 
@@ -537,6 +576,10 @@ function renderOverview(data) {
     summaryCard("VLAN Gateways", `${gatewayOnline}/${vlans.length} Online`, gatewayOnline === vlans.length ? "online" : "warning", "shield"),
     summaryCard("Devices", `${devices.length} discovered`, countByStatus(devices, "offline") > 0 ? "warning" : "online", "devices", `${countByStatus(devices, "online")} online`),
   ]);
+  const operatorPanels = el("section", { className: "operator-grid" }, [
+    problemDevicesPanel(data),
+    recentEventsPanel(data),
+  ]);
   const dnsChecks = dnsChecksPanel(data);
 
   const compactTopology = el("section", { className: "panel" }, [
@@ -550,7 +593,108 @@ function renderOverview(data) {
     el("div", { className: "vlan-card-grid" }, (data.devices_by_vlan || []).map((group) => vlanSummaryCard(group, data))),
   ]);
 
-  elements.pageContent.append(...[hero, warnings, summary, dnsChecks, compactTopology, vlanCards].filter(Boolean));
+  elements.pageContent.append(...[hero, warnings, summary, operatorPanels, dnsChecks, compactTopology, vlanCards].filter(Boolean));
+}
+
+function problemDevices(data) {
+  return (data.devices || []).filter((device) => device.status !== "online").slice(0, 8);
+}
+
+function problemDevicesPanel(data) {
+  const devices = problemDevices(data);
+  const rows = devices.length > 0
+    ? devices.map(problemDeviceRow)
+    : [el("div", { className: "compact-empty", text: "No problem devices" })];
+  return el("section", { className: "panel compact-panel" }, [
+    sectionTitle("Problem Devices"),
+    el("div", { className: "problem-list" }, rows),
+    el("div", { className: "quick-actions" }, [
+      quickFilterButton("Offline", { status: "offline" }),
+      quickFilterButton("Unknown", { status: "unknown" }),
+      quickFilterButton("Location", { expected: "unknown-location" }),
+    ]),
+  ]);
+}
+
+function problemDeviceRow(device) {
+  const subtitle = [
+    text(device.ip_address),
+    `${text(device.vlan_name)} / ${text(device.vlan_id)}`,
+  ].join(" / ");
+  return el("button", {
+    className: "problem-row",
+    attrs: {
+      type: "button",
+      "data-device-focus": deviceKey(device),
+      "data-device-vlan": device.vlan_id,
+    },
+  }, [
+    statusDot(device.status),
+    el("span", { className: "problem-main" }, [
+      el("strong", { text: device.display_name || device.name || device.ip_address }),
+      el("span", { text: subtitle }),
+    ]),
+    statusPill(device.status),
+  ]);
+}
+
+function recentEvents(data) {
+  return data.history?.events || [];
+}
+
+function eventKey(event) {
+  if (event.id !== undefined && event.id !== null) {
+    return `id:${event.id}`;
+  }
+  return [
+    event.event_time,
+    event.event_type,
+    event.device_key,
+    event.message,
+  ].map(text).join("|");
+}
+
+function recentEventsPanel(data) {
+  const events = recentEvents(data);
+  const rows = events.length > 0
+    ? events.map((event) => {
+      const key = eventKey(event);
+      const isNew = state.eventListInitialized && !state.seenEventKeys.has(key);
+      return eventRow(event, isNew);
+    })
+    : [el("div", { className: "compact-empty", text: "No recent events" })];
+  events.forEach((event) => state.seenEventKeys.add(eventKey(event)));
+  state.eventListInitialized = true;
+  return el("section", { className: "panel compact-panel" }, [
+    sectionTitle("Recent Events"),
+    el("div", { className: "event-list" }, rows),
+  ]);
+}
+
+function eventRow(event, isNew = false) {
+  const timestamp = formatEventTimestamp(event.event_time);
+  return el("div", { className: `event-row ${statusClass(event.severity)} ${isNew ? "new-event" : ""}` }, [
+    el("span", { className: "event-icon", html: icon(event.severity === "warning" ? "alert" : "history") }),
+    el("span", { className: "event-message" }, [
+      el("strong", { text: event.display_name || "Network event" }),
+      el("span", { text: event.message || event.event_type || "Status changed" }),
+    ]),
+    el("span", { className: "event-meta", attrs: { title: timestamp } }, [
+      el("span", { className: "event-time-ago", text: formatRelativeTime(event.event_time) }),
+      el("span", { className: "event-timestamp", text: timestamp }),
+    ]),
+  ]);
+}
+
+function quickFilterButton(label, filters) {
+  return el("button", {
+    className: "quick-filter-button",
+    text: label,
+    attrs: {
+      type: "button",
+      "data-quick-filter": JSON.stringify(filters),
+    },
+  });
 }
 
 function overviewTopologyGraph(data) {
@@ -860,6 +1004,10 @@ function deviceRow(device) {
     detailItem("MAC", device.mac_address),
     detailItem("Hostname", device.hostname),
     detailItem("Last seen", formatTime(device.last_seen)),
+    detailItem("First seen", formatTime(device.history?.first_seen)),
+    detailItem("Status change", formatTime(device.history?.last_status_change)),
+    detailItem("Offline since", formatTime(device.history?.offline_since)),
+    detailItem("Previous status", device.history?.previous_status),
     detailItem("Discovery", (device.discovery_sources || ["Unknown"]).join(", ")),
     detailItem("Connected switch", device.connected_switch),
     detailItem("Switch port", device.connected_port),
@@ -943,6 +1091,7 @@ function renderSettings(data) {
       settingsCard("Runtime", [
         readonlyLine("App version", APP_VERSION),
         readonlyLine("Discovery", `${text(discovery.status)} / ${(discovery.subnets || []).length} subnets`),
+        readonlyLine("History DB", data.history?.database_path),
         readonlyLine("SNMP mapping", "Not implemented yet"),
         readonlyLine("Generated", formatTime(data.generated_at)),
       ]),
@@ -1062,7 +1211,8 @@ async function loadStatus(options = {}) {
   }
 
   try {
-    const response = await fetch("/api/status", { cache: "no-store" });
+    const url = options.forceRefresh ? "/api/status?refresh=true" : "/api/status";
+    const response = await fetch(url, { cache: "no-store" });
     if (!response.ok) {
       throw new Error(`Status request failed: HTTP ${response.status}`);
     }
@@ -1117,7 +1267,7 @@ function bindEvents() {
   });
 
   elements.settingsButton.addEventListener("click", () => setRoute("settings"));
-  elements.refreshButton.addEventListener("click", () => loadStatus({ preserveScroll: true }));
+  elements.refreshButton.addEventListener("click", () => loadStatus({ preserveScroll: true, forceRefresh: true }));
 
   elements.pageContent.addEventListener("input", (event) => {
     const target = event.target;
@@ -1155,6 +1305,28 @@ function bindEvents() {
     const vlanLink = event.target.closest("[data-vlan-link]");
     if (vlanLink) {
       setRoute("devices", { vlan: vlanLink.dataset.vlanLink });
+      return;
+    }
+
+    const quickFilter = event.target.closest("[data-quick-filter]");
+    if (quickFilter) {
+      try {
+        state.filters = { ...defaultFilters(), ...JSON.parse(quickFilter.dataset.quickFilter || "{}") };
+      } catch {
+        state.filters = defaultFilters();
+      }
+      saveFilters();
+      setRoute("devices");
+      return;
+    }
+
+    const deviceFocus = event.target.closest("[data-device-focus]");
+    if (deviceFocus) {
+      state.filters = { ...defaultFilters(), vlan: String(deviceFocus.dataset.deviceVlan || "all") };
+      state.openDevices.add(String(deviceFocus.dataset.deviceFocus));
+      saveFilters();
+      saveOpenDevices();
+      setRoute("devices");
       return;
     }
 
