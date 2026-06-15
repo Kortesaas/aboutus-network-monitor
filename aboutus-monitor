@@ -1,0 +1,215 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_NAME="ABOUTUS Network Monitor"
+SERVICE_NAME="aboutus-network-monitor.service"
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VENV_DIR="${ABOUTUS_MONITOR_VENV:-$PROJECT_DIR/.venv}"
+HOST="${ABOUTUS_MONITOR_HOST:-0.0.0.0}"
+PORT="${ABOUTUS_MONITOR_PORT:-8080}"
+CONFIG_FILE="${ABOUTUS_MONITOR_CONFIG:-$PROJECT_DIR/config/network.yaml}"
+PYTHON_BIN="${PYTHON:-python3}"
+
+usage() {
+  cat <<EOF
+$APP_NAME
+
+Usage:
+  ./aboutus-monitor setup              Create/update .venv and install requirements
+  ./aboutus-monitor run                Run the dashboard in the foreground
+  ./aboutus-monitor serve              Same as run; used by systemd
+  ./aboutus-monitor install-service    Install, enable, and start the boot service
+  ./aboutus-monitor uninstall-service  Stop, disable, and remove the boot service
+  ./aboutus-monitor start              Start the systemd service
+  ./aboutus-monitor stop               Stop the systemd service
+  ./aboutus-monitor restart            Restart the systemd service
+  ./aboutus-monitor status             Show service status
+  ./aboutus-monitor logs               Follow service logs
+  ./aboutus-monitor health             Check the local health endpoint
+  ./aboutus-monitor url                Print the dashboard URL
+
+Environment overrides:
+  ABOUTUS_MONITOR_HOST=$HOST
+  ABOUTUS_MONITOR_PORT=$PORT
+  ABOUTUS_MONITOR_CONFIG=$CONFIG_FILE
+  ABOUTUS_MONITOR_VENV=$VENV_DIR
+EOF
+}
+
+sudo_cmd() {
+  if [[ "$(id -u)" -eq 0 ]]; then
+    "$@"
+  else
+    sudo "$@"
+  fi
+}
+
+need_systemctl() {
+  if ! command -v systemctl >/dev/null 2>&1; then
+    echo "systemctl is not available on this system." >&2
+    exit 1
+  fi
+}
+
+setup() {
+  cd "$PROJECT_DIR"
+  if [[ ! -x "$VENV_DIR/bin/python" ]]; then
+    "$PYTHON_BIN" -m venv "$VENV_DIR"
+  fi
+  "$VENV_DIR/bin/python" -m pip install --upgrade pip
+  "$VENV_DIR/bin/python" -m pip install -r "$PROJECT_DIR/requirements.txt"
+}
+
+port_is_listening() {
+  ss -ltn "sport = :$PORT" 2>/dev/null | awk 'NR > 1 { found = 1 } END { exit found ? 0 : 1 }'
+}
+
+serve() {
+  cd "$PROJECT_DIR"
+  if [[ ! -x "$VENV_DIR/bin/python" ]]; then
+    echo "Virtualenv not found. Run ./aboutus-monitor setup first." >&2
+    exit 1
+  fi
+  export ABOUTUS_MONITOR_CONFIG="$CONFIG_FILE"
+  exec "$VENV_DIR/bin/python" -m uvicorn app.main:app --host "$HOST" --port "$PORT"
+}
+
+service_user() {
+  if [[ -n "${ABOUTUS_MONITOR_USER:-}" ]]; then
+    echo "$ABOUTUS_MONITOR_USER"
+  elif [[ -n "${SUDO_USER:-}" && "$SUDO_USER" != "root" ]]; then
+    echo "$SUDO_USER"
+  else
+    id -un
+  fi
+}
+
+install_service() {
+  need_systemctl
+  setup
+
+  local run_user run_group tmp_unit
+  run_user="$(service_user)"
+  run_group="$(id -gn "$run_user")"
+
+  if port_is_listening && ! systemctl is-active --quiet "$SERVICE_NAME"; then
+    cat >&2 <<EOF
+Port $PORT is already in use, but $SERVICE_NAME is not active.
+Stop the manual dashboard process first, then run:
+
+  ./aboutus-monitor install-service
+
+EOF
+    exit 1
+  fi
+
+  tmp_unit="$(mktemp)"
+
+  cat >"$tmp_unit" <<EOF
+[Unit]
+Description=$APP_NAME
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=$run_user
+Group=$run_group
+WorkingDirectory=$PROJECT_DIR
+Environment=ABOUTUS_MONITOR_HOST=$HOST
+Environment=ABOUTUS_MONITOR_PORT=$PORT
+Environment=ABOUTUS_MONITOR_CONFIG=$CONFIG_FILE
+ExecStart=$PROJECT_DIR/aboutus-monitor serve
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  sudo_cmd install -m 0644 "$tmp_unit" "/etc/systemd/system/$SERVICE_NAME"
+  rm -f "$tmp_unit"
+  sudo_cmd systemctl daemon-reload
+  sudo_cmd systemctl enable "$SERVICE_NAME"
+  sudo_cmd systemctl restart "$SERVICE_NAME"
+  systemctl status "$SERVICE_NAME" --no-pager
+}
+
+uninstall_service() {
+  need_systemctl
+  sudo_cmd systemctl disable --now "$SERVICE_NAME" || true
+  sudo_cmd rm -f "/etc/systemd/system/$SERVICE_NAME"
+  sudo_cmd systemctl daemon-reload
+}
+
+service_cmd() {
+  need_systemctl
+  local action="$1"
+  case "$action" in
+    status)
+      systemctl status "$SERVICE_NAME" --no-pager
+      ;;
+    logs)
+      journalctl -u "$SERVICE_NAME" -f
+      ;;
+    start|stop|restart)
+      sudo_cmd systemctl "$action" "$SERVICE_NAME"
+      ;;
+    *)
+      echo "Unknown service action: $action" >&2
+      exit 1
+      ;;
+  esac
+}
+
+health() {
+  local url="http://127.0.0.1:$PORT/healthz"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsS "$url"
+    echo
+  else
+    "$VENV_DIR/bin/python" - <<PY
+import urllib.request
+print(urllib.request.urlopen("$url", timeout=3).read().decode())
+PY
+  fi
+}
+
+print_url() {
+  echo "http://192.168.99.10:$PORT"
+}
+
+command="${1:-help}"
+case "$command" in
+  setup)
+    setup
+    ;;
+  run|serve)
+    serve
+    ;;
+  install-service)
+    install_service
+    ;;
+  uninstall-service)
+    uninstall_service
+    ;;
+  start|stop|restart|status|logs)
+    service_cmd "$command"
+    ;;
+  health)
+    health
+    ;;
+  url)
+    print_url
+    ;;
+  help|-h|--help)
+    usage
+    ;;
+  *)
+    echo "Unknown command: $command" >&2
+    usage >&2
+    exit 1
+    ;;
+esac

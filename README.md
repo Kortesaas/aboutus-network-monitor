@@ -26,6 +26,7 @@ No router or switch configuration is changed. No packet capture or deep traffic 
 ## Repository structure
 
 ```text
+aboutus-monitor    One-file setup, run, service, logs, and health helper
 app/
   checks.py          Probe helpers for ping, TCP, and HTTP checks
   config.py          YAML config loader
@@ -41,16 +42,44 @@ config/
 
 ```bash
 cd /home/aboutus/aboutus-network-monitor
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8080
+./aboutus-monitor setup
+./aboutus-monitor run
 ```
 
 Then open:
 
 ```text
 http://192.168.99.10:8080
+```
+
+## Start on boot
+
+Use the project helper to install the systemd boot service:
+
+```bash
+cd /home/aboutus/aboutus-network-monitor
+./aboutus-monitor install-service
+```
+
+That command creates/updates `/etc/systemd/system/aboutus-network-monitor.service`, enables it, and starts it. It may ask for the Pi user's sudo password.
+
+If the dashboard is already running in the foreground with `./aboutus-monitor run`, stop that process first so port `8080` is free for systemd.
+
+After installation, use the same helper for day-to-day control:
+
+```bash
+./aboutus-monitor status
+./aboutus-monitor restart
+./aboutus-monitor logs
+./aboutus-monitor health
+./aboutus-monitor stop
+./aboutus-monitor start
+```
+
+To remove the boot service:
+
+```bash
+./aboutus-monitor uninstall-service
 ```
 
 ## API

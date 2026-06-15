@@ -973,6 +973,9 @@ select {
 .device-list {
   display: grid;
   gap: 8px;
+  margin-left: 22px;
+  padding-left: 14px;
+  border-left: 1px solid var(--border);
 }
 
 .device-group.collapsed .device-list {
@@ -1258,20 +1261,24 @@ select {
 }
 
 @media (max-width: 760px) {
-  .site-header,
+  .site-header {
+    align-items: center;
+    grid-template-columns: 1fr auto;
+  }
+
   .page-heading,
   .ready-panel {
     align-items: stretch;
     grid-template-columns: 1fr;
   }
 
-  .header-actions,
   .page-heading {
     flex-direction: column;
   }
 
   .header-actions {
-    justify-content: stretch;
+    flex-direction: row;
+    justify-content: flex-end;
   }
 
   .status-bar {
@@ -1295,7 +1302,14 @@ select {
   }
 
   .primary-button {
-    flex: 1 1 auto;
+    flex: 0 0 42px;
+    width: 42px;
+    padding: 0;
+  }
+
+  #settingsButton,
+  #refreshButton span:last-child {
+    display: none;
   }
 
   .nav-list {
@@ -1306,20 +1320,19 @@ select {
   }
 
   .nav-item {
-    flex-direction: column;
     justify-content: center;
     gap: 3px;
-    min-height: 50px;
-    padding: 5px 2px;
-    font-size: 0.68rem;
+    min-height: 40px;
+    padding: 4px 2px;
+    font-size: 0.66rem;
     line-height: 1;
     text-align: center;
-    white-space: normal;
+    white-space: nowrap;
   }
 
   .nav-icon {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
   }
 
   .vlan-card-grid,
@@ -1376,6 +1389,11 @@ select {
 
   .device-group-toggle {
     grid-template-columns: 24px 40px minmax(0, 1fr);
+  }
+
+  .device-list {
+    margin-left: 12px;
+    padding-left: 10px;
   }
 
   .device-group-toggle .badge {
