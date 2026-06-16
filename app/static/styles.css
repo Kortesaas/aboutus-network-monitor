@@ -1016,15 +1016,19 @@ button:disabled {
   min-width: 0;
   min-height: 76px;
   padding: 12px;
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--vlan-color) 50%, var(--border));
   border-radius: var(--radius);
-  background: var(--surface);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--vlan-color) 18%, var(--surface)), var(--surface));
   color: var(--text);
   text-align: left;
 }
 
 .topology-vlan-node:hover {
-  border-color: color-mix(in srgb, var(--accent) 44%, var(--border));
+  border-color: color-mix(in srgb, var(--vlan-color) 82%, var(--border));
+}
+
+.topology-vlan-icon {
+  color: var(--vlan-color);
 }
 
 .topology-vlan-icon {
@@ -1050,13 +1054,21 @@ button:disabled {
   width: 100%;
   min-width: 0;
   padding: var(--pad);
+  border-color: color-mix(in srgb, var(--vlan-color) 44%, var(--border));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--vlan-color) 15%, var(--surface)), var(--surface));
   color: var(--text);
   text-align: left;
 }
 
 .vlan-summary-card:hover,
 .vlan-lane:hover {
-  border-color: color-mix(in srgb, var(--accent) 44%, var(--border));
+  border-color: color-mix(in srgb, var(--vlan-color) 72%, var(--border));
+}
+
+.vlan-summary-card .vlan-icon,
+.vlan-lane .vlan-icon,
+.device-group-toggle .vlan-icon {
+  color: var(--vlan-color);
 }
 
 .vlan-summary-head {
@@ -1211,6 +1223,8 @@ select {
   width: 100%;
   min-height: 58px;
   padding: 9px 12px;
+  border-color: color-mix(in srgb, var(--vlan-color) 38%, var(--border));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--vlan-color) 12%, var(--surface)), var(--surface));
   color: var(--text);
   text-align: left;
 }
@@ -1556,6 +1570,764 @@ select {
   font-size: 0.82rem;
 }
 
+.switch-page-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--gap);
+}
+
+.vlan-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: min(1540px, 100%);
+  margin: 0 auto;
+}
+
+.vlan-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 38px;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--vlan-color) 36%, var(--border));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--vlan-color) 7%, var(--surface));
+  color: var(--text);
+}
+
+.vlan-legend-item:hover {
+  border-color: color-mix(in srgb, var(--vlan-color) 68%, var(--border));
+}
+
+.legend-swatch {
+  width: 18px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--vlan-color);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+
+.vlan-legend-item strong,
+.vlan-legend-item small {
+  display: block;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.vlan-legend-item strong {
+  font-size: 0.8rem;
+}
+
+.vlan-legend-item small {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 760;
+}
+
+.switch-stack {
+  display: grid;
+  align-items: start;
+  gap: var(--gap);
+}
+
+.switch-faceplate {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: var(--pad);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--surface-2), var(--surface));
+  box-shadow: var(--shadow);
+}
+
+.switch-faceplate-head {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.switch-faceplate-head strong,
+.switch-faceplate-head span {
+  display: block;
+  min-width: 0;
+}
+
+.switch-faceplate-head span {
+  color: var(--muted);
+}
+
+.switch-faceplate-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.switch-system-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.switch-system-line span {
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.switch-port-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--port-columns), minmax(34px, 1fr));
+  gap: 7px;
+  padding: 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: #080a0d;
+  overflow-x: auto;
+}
+
+.allied-faceplate {
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: calc(var(--pad) + 2px);
+  scrollbar-width: thin;
+}
+
+.allied-panel {
+  position: relative;
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) 86px;
+  gap: 10px;
+  width: 100%;
+  max-width: 1120px;
+  min-width: 0;
+  padding: 14px 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, #161d25, #0f141a);
+  color: var(--text);
+  overflow: hidden;
+}
+
+.allied-left-panel {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 8px;
+  min-width: 0;
+  z-index: 1;
+}
+
+.allied-brand-row {
+  display: grid;
+  gap: 2px;
+  min-height: 24px;
+  font-size: 0.72rem;
+  line-height: 0.95;
+}
+
+.allied-brand-row strong {
+  color: var(--accent);
+  font-size: 0.68rem;
+}
+
+.allied-brand-row span {
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 850;
+}
+
+.allied-led-area {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 4px;
+  min-height: 68px;
+  font-size: 0.48rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.eco-led {
+  padding: 2px 4px;
+  border: 1px solid color-mix(in srgb, var(--online) 50%, var(--border));
+  border-radius: 4px;
+  color: var(--online);
+}
+
+.panel-led {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #1ddf46;
+  box-shadow: 0 0 8px rgba(29, 223, 70, 0.9);
+}
+
+.allied-copper-area {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  align-self: center;
+  z-index: 1;
+}
+
+.allied-port-block {
+  display: grid;
+  gap: 5px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface-2) 70%, #05070a);
+}
+
+.allied-port-row {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.allied-port-row.top .switch-port {
+  grid-template-rows: auto 1fr;
+}
+
+.allied-port-row.bottom .switch-port {
+  grid-template-rows: 1fr auto;
+}
+
+.allied-port-row.bottom .port-number {
+  order: 2;
+}
+
+.allied-port-row.bottom .port-jack {
+  order: 1;
+}
+
+.allied-port-row .port-label,
+.allied-port-row .port-vlan-strip {
+  display: none;
+}
+
+.allied-sfp-area {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  align-self: center;
+  gap: 4px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface-2) 70%, #05070a);
+}
+
+.sfp-label {
+  justify-self: center;
+  color: var(--muted);
+  font-size: 0.56rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.sfp-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 28px);
+  gap: 6px;
+}
+
+.allied-panel .switch-port {
+  min-width: 0;
+  min-height: 31px;
+  gap: 2px;
+  padding: 1px;
+  border-color: color-mix(in srgb, var(--port-color) 32%, #4a535d);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 36%),
+    linear-gradient(90deg, color-mix(in srgb, var(--port-color) 28%, transparent), transparent 18% 82%, color-mix(in srgb, var(--port-color) 28%, transparent)),
+    #14191f;
+  color: var(--muted);
+  overflow: visible;
+}
+
+.allied-panel .switch-port:hover,
+.allied-panel .switch-port.selected {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--port-color) 66%, #ccd4dc);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.32);
+}
+
+.allied-panel .switch-port.media-sfp {
+  min-height: 36px;
+  border-width: 2px;
+}
+
+.allied-panel .port-number {
+  position: absolute;
+  top: -13px;
+  left: 50%;
+  color: var(--muted);
+  font-size: 0.48rem;
+  line-height: 1;
+  transform: translateX(-50%);
+}
+
+.allied-port-row.bottom .port-number {
+  top: auto;
+  bottom: -13px;
+}
+
+.sfp-grid .port-number {
+  top: -13px;
+}
+
+.sfp-grid .switch-port:nth-child(n + 3) .port-number {
+  top: auto;
+  bottom: -13px;
+}
+
+.allied-panel .port-jack {
+  width: 20px;
+  height: 18px;
+}
+
+.allied-panel .jack-cavity {
+  inset: 4px 3px 3px;
+}
+
+.allied-panel .jack-notch {
+  width: 8px;
+  height: 2px;
+}
+
+.allied-panel .jack-pins {
+  left: 5px;
+  right: 5px;
+  bottom: 3px;
+  height: 2px;
+}
+
+.allied-panel .port-led {
+  width: 6px;
+  height: 6px;
+  bottom: 2px;
+}
+
+.allied-panel .link-led {
+  left: 3px;
+}
+
+.allied-panel .activity-led {
+  right: 3px;
+}
+
+.tplink-faceplate {
+  gap: 10px;
+}
+
+.tplink-panel {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 12px;
+  width: min(100%, 760px);
+  padding: 14px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, #161d25, #0f141a);
+  overflow: hidden;
+}
+
+.tplink-left-panel,
+.tplink-led-area,
+.tplink-brand-row {
+  display: grid;
+  min-width: 0;
+}
+
+.tplink-left-panel {
+  grid-template-rows: auto 1fr;
+  gap: 8px;
+}
+
+.tplink-brand-row {
+  gap: 2px;
+  line-height: 1;
+}
+
+.tplink-brand-row strong {
+  color: var(--accent);
+  font-size: 0.78rem;
+}
+
+.tplink-brand-row span {
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 850;
+}
+
+.tplink-led-area {
+  align-content: center;
+  justify-items: center;
+  gap: 5px;
+  color: var(--text);
+  font-size: 0.5rem;
+  font-weight: 850;
+  text-align: center;
+}
+
+.tplink-port-area {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-self: center;
+  gap: 16px;
+}
+
+.tplink-port-block {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface-2) 70%, #05070a);
+}
+
+.tplink-port-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tplink-port-row.top .switch-port {
+  grid-template-rows: auto 1fr;
+}
+
+.tplink-port-row.bottom .switch-port {
+  grid-template-rows: 1fr auto;
+}
+
+.tplink-port-row.bottom .port-number {
+  order: 2;
+}
+
+.tplink-port-row.bottom .port-jack {
+  order: 1;
+}
+
+.tplink-port-row .port-label,
+.tplink-port-row .port-vlan-strip {
+  display: none;
+}
+
+.tplink-panel .switch-port {
+  min-height: 42px;
+  padding: 2px;
+  overflow: visible;
+}
+
+.tplink-panel .port-number {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  color: var(--muted);
+  font-size: 0.5rem;
+  line-height: 1;
+  transform: translateX(-50%);
+}
+
+.tplink-port-row.bottom .port-number {
+  top: auto;
+  bottom: -14px;
+}
+
+.tplink-panel .port-jack {
+  width: 34px;
+  height: 27px;
+}
+
+.switch-port {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 3px;
+  place-items: center;
+  min-width: 34px;
+  min-height: 70px;
+  padding: 6px 4px;
+  border: 1px solid color-mix(in srgb, var(--port-color) 28%, var(--border));
+  border-radius: 5px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07), transparent 38%),
+    #12171d;
+  color: var(--muted);
+  overflow: hidden;
+  transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+}
+
+.switch-port::after {
+  content: "";
+  position: absolute;
+  inset: auto 4px 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--port-color) 74%, transparent);
+  opacity: 0.75;
+}
+
+.switch-port:hover,
+.switch-port.selected {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--port-color) 78%, var(--border));
+}
+
+.switch-port.link-up {
+  border-color: color-mix(in srgb, var(--online) 45%, var(--border));
+}
+
+.switch-port.link-down {
+  opacity: 0.72;
+}
+
+.switch-port.type-trunk,
+.switch-port.type-downstream,
+.switch-port.type-mgmt {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 38%),
+    radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--port-color) 18%, transparent), transparent 68%),
+    #12171d;
+}
+
+.port-number {
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.port-jack {
+  position: relative;
+  display: block;
+  width: 38px;
+  height: 30px;
+  border: 1px solid #66707a;
+  border-radius: 4px 4px 3px 3px;
+  background:
+    linear-gradient(180deg, #7a858f 0 18%, #3d454d 18% 24%, #6b747d 24% 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.3),
+    0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.jack-cavity {
+  position: absolute;
+  inset: 6px 5px 6px;
+  border-radius: 2px;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(80, 92, 102, 0.28), transparent 34%),
+    #050607;
+  clip-path: polygon(0 20%, 24% 20%, 31% 0, 69% 0, 76% 20%, 100% 20%, 100% 100%, 0 100%);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.9);
+}
+
+.jack-notch {
+  position: absolute;
+  top: 1px;
+  left: 50%;
+  z-index: 1;
+  width: 13px;
+  height: 4px;
+  border-radius: 0 0 2px 2px;
+  background: #a6adb4;
+  transform: translateX(-50%);
+}
+
+.jack-pins {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 6px;
+  z-index: 1;
+  height: 4px;
+  border-radius: 1px;
+  background: repeating-linear-gradient(90deg, #c7a65a 0 2px, transparent 2px 4px);
+  opacity: 0.85;
+}
+
+.port-led {
+  position: absolute;
+  z-index: 2;
+  bottom: 3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: #1b2426;
+  box-shadow: inset 0 0 3px rgba(0, 0, 0, 0.8);
+}
+
+.link-led {
+  left: 4px;
+}
+
+.activity-led {
+  right: 4px;
+}
+
+.switch-port.link-up .link-led {
+  background: #26e45d;
+  border-color: color-mix(in srgb, #26e45d 70%, transparent);
+  box-shadow: 0 0 9px rgba(38, 228, 93, 0.86), inset 0 0 2px rgba(255, 255, 255, 0.4);
+}
+
+.switch-port.has-macs .activity-led {
+  background: #f3c63b;
+  border-color: color-mix(in srgb, #f3c63b 70%, transparent);
+  box-shadow: 0 0 8px rgba(243, 198, 59, 0.72), inset 0 0 2px rgba(255, 255, 255, 0.36);
+}
+
+.port-label {
+  max-width: 100%;
+  color: var(--muted);
+  font-size: 0.62rem;
+  line-height: 1.1;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.port-vlan-strip {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 1px;
+  width: 100%;
+  min-height: 3px;
+}
+
+.port-vlan-strip i {
+  display: block;
+  min-height: 3px;
+  border-radius: 1px;
+  background: var(--vlan-color);
+  opacity: 0.72;
+}
+
+.port-detail-panel {
+  position: static;
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  max-height: none;
+  overflow: visible;
+  padding: var(--pad);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface-2) 72%, var(--surface));
+}
+
+.port-detail-panel.empty {
+  min-height: 220px;
+  place-items: center;
+}
+
+.port-detail-empty {
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  color: var(--muted);
+}
+
+.port-detail-empty svg {
+  width: 34px;
+  height: 34px;
+  color: var(--accent);
+}
+
+.port-detail-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.port-detail-head h3 {
+  margin: 0;
+}
+
+.port-detail-groups {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.port-detail-groups .detail-group {
+  padding: 10px;
+}
+
+.port-mac-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.mac-vlan-groups {
+  display: grid;
+  gap: 10px;
+}
+
+.mac-vlan-group {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.mac-vlan-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 800;
+}
+
+.mac-list {
+  display: grid;
+  gap: 5px;
+}
+
+.mac-row {
+  display: grid;
+  grid-template-columns: minmax(118px, 1fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.mac-row.direct {
+  color: var(--text);
+}
+
+.mac-row > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .settings-grid {
   align-items: start;
 }
@@ -1689,8 +2461,18 @@ select {
   }
 
   .filter-panel,
-  .topology-layout {
+  .topology-layout,
+  .switch-page-grid {
     grid-template-columns: 1fr;
+  }
+
+  .port-detail-panel {
+    position: static;
+    max-height: none;
+  }
+
+  .port-detail-groups {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .device-summary {
@@ -1747,7 +2529,7 @@ select {
   .nav-list {
     display: grid;
     grid-column: 1;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     justify-self: stretch;
     width: 100%;
     gap: 2px;
@@ -1780,6 +2562,14 @@ select {
   .operator-grid,
   .device-summary-strip,
   .settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .switch-port-grid {
+    grid-template-columns: repeat(8, minmax(34px, 1fr));
+  }
+
+  .port-detail-groups {
     grid-template-columns: 1fr;
   }
 

@@ -17,6 +17,50 @@ discovery:
   host_timeout: 5s
   max_parallel_scans: 2
 
+ui:
+  vlan_colors:
+    "10":
+      color: "#0d8df2"
+      dark: "#07579f"
+      text: "#ffffff"
+    "20":
+      color: "#00c822"
+      dark: "#00750d"
+      text: "#ffffff"
+    "30":
+      color: "#df1726"
+      dark: "#9b101a"
+      text: "#ffffff"
+    "40":
+      color: "#a52ab6"
+      dark: "#681675"
+      text: "#ffffff"
+    "50":
+      color: "#ef790d"
+      dark: "#844500"
+      text: "#ffffff"
+    "99":
+      color: "#f4f5f7"
+      dark: "#cfd4da"
+      text: "#101820"
+  port_role_colors:
+    stage:
+      color: "#f3d21b"
+      dark: "#b79700"
+      text: "#090909"
+    router:
+      color: "#050505"
+      dark: "#000000"
+      text: "#f3d21b"
+    trunk:
+      color: "#f3d21b"
+      dark: "#b79700"
+      text: "#090909"
+    unknown:
+      color: "#27303a"
+      dark: "#151a21"
+      text: "#a8b3bf"
+
 snmp:
   enabled: true
   version: "2c"
@@ -26,15 +70,195 @@ snmp:
   max_parallel_hosts: 2
   poll_interfaces: true
   poll_fdb: true
+  poll_q_bridge: true
   poll_poe: false
+  targets:
+    - foh-switch
   # Switch-port locations are only treated as exact when the port is listed here.
-  # Example:
-  # trusted_edge_ports:
-  #   stage-switch:
-  #     - "1"
-  #     - "2"
-  trusted_edge_ports: {}
-  uplink_ports: {}
+  trusted_edge_ports:
+    foh-switch:
+      - "48"
+  uplink_ports:
+    foh-switch:
+      - "41"
+      - "47"
+
+switches:
+  - id: foh-switch
+    name: FOH AT-GS950/48
+    model: Allied Telesis AT-GS950/48
+    ip_address: 192.168.99.2
+    port_count: 48
+    layout:
+      columns: 24
+      rows: 2
+    ports:
+      "41":
+        label: Stage trunk
+        role: downstream trunk
+        type: downstream
+        expected_vlans: [10, 20, 30, 40, 50, 99]
+        native_vlan: 99
+        pvid: 99
+        uplink: true
+        notes: Carries VLANs toward stage/downstream switch.
+      "47":
+        label: LANCOM router trunk
+        role: router trunk
+        type: trunk
+        expected_vlans: [10, 20, 30, 40, 50, 99]
+        native_vlan: 99
+        pvid: 99
+        uplink: true
+        notes: Core trunk to LANCOM router.
+      "48":
+        label: Monitor Pi
+        role: management access
+        type: mgmt
+        expected_vlans: [99]
+        native_vlan: 99
+        pvid: 99
+        notes: MGMT access port for ABOUTUS Network Monitor Pi.
+
+  - id: stage-switch
+    name: Stage TL-SG1016PE
+    model: TP-Link TL-SG1016PE
+    ip_address: 192.168.99.3
+    port_count: 16
+    layout:
+      columns: 8
+      rows: 2
+    snmp_enabled: false
+    ports:
+      "1":
+        label: CTRL
+        role: CONTROL access
+        type: access
+        expected_vlans: [10]
+        native_vlan: 10
+        pvid: 10
+        notes: Manual fallback stage port assignment.
+      "2":
+        label: CTRL
+        role: CONTROL access
+        type: access
+        expected_vlans: [10]
+        native_vlan: 10
+        pvid: 10
+        notes: Manual fallback stage port assignment.
+      "3":
+        label: AUDIO
+        role: AUDIO access
+        type: access
+        expected_vlans: [20]
+        native_vlan: 20
+        pvid: 20
+        notes: Manual fallback stage port assignment.
+      "4":
+        label: AUDIO
+        role: AUDIO access
+        type: access
+        expected_vlans: [20]
+        native_vlan: 20
+        pvid: 20
+        notes: Manual fallback stage port assignment.
+      "5":
+        label: AUDIO
+        role: AUDIO access
+        type: access
+        expected_vlans: [20]
+        native_vlan: 20
+        pvid: 20
+        notes: Manual fallback stage port assignment.
+      "6":
+        label: AUDIO
+        role: AUDIO access
+        type: access
+        expected_vlans: [20]
+        native_vlan: 20
+        pvid: 20
+        notes: Manual fallback stage port assignment.
+      "7":
+        label: LASER
+        role: LASER access
+        type: access
+        expected_vlans: [30]
+        native_vlan: 30
+        pvid: 30
+        notes: Manual fallback stage port assignment.
+      "8":
+        label: LASER
+        role: LASER access
+        type: access
+        expected_vlans: [30]
+        native_vlan: 30
+        pvid: 30
+        notes: Manual fallback stage port assignment.
+      "9":
+        label: LIGHTING
+        role: LIGHTING access
+        type: access
+        expected_vlans: [40]
+        native_vlan: 40
+        pvid: 40
+        notes: Manual fallback stage port assignment.
+      "10":
+        label: LIGHTING
+        role: LIGHTING access
+        type: access
+        expected_vlans: [40]
+        native_vlan: 40
+        pvid: 40
+        notes: Manual fallback stage port assignment.
+      "11":
+        label: LIGHTING
+        role: LIGHTING access
+        type: access
+        expected_vlans: [40]
+        native_vlan: 40
+        pvid: 40
+        notes: Manual fallback stage port assignment.
+      "12":
+        label: LIGHTING
+        role: LIGHTING access
+        type: access
+        expected_vlans: [40]
+        native_vlan: 40
+        pvid: 40
+        notes: Manual fallback stage port assignment.
+      "13":
+        label: VIDEO
+        role: VIDEO access
+        type: access
+        expected_vlans: [50]
+        native_vlan: 50
+        pvid: 50
+        notes: Manual fallback stage port assignment.
+      "14":
+        label: VIDEO
+        role: VIDEO access
+        type: access
+        expected_vlans: [50]
+        native_vlan: 50
+        pvid: 50
+        notes: Manual fallback stage port assignment.
+      "15":
+        label: FOH uplink
+        role: FOH uplink
+        type: trunk
+        expected_vlans: [10, 20, 30, 40, 50, 99]
+        native_vlan: 99
+        pvid: 99
+        uplink: true
+        notes: Manual fallback until TP-Link SNMP support is confirmed.
+      "16":
+        label: MGMT access
+        role: management access
+        type: mgmt
+        expected_vlans: [99]
+        native_vlan: 99
+        pvid: 99
+        notes: Manual fallback port role.
 
 infrastructure:
   - id: lancom-router
@@ -44,6 +268,7 @@ infrastructure:
     ip_address: 192.168.99.1
     web_url: http://192.168.99.1
     vlan: MGMT
+    snmp_enabled: false
     check:
       type: ping
 
@@ -54,6 +279,7 @@ infrastructure:
     ip_address: 192.168.99.2
     web_url: http://192.168.99.2
     vlan: MGMT
+    snmp_enabled: true
     check:
       type: ping
 
@@ -64,6 +290,7 @@ infrastructure:
     ip_address: 192.168.99.3
     web_url: http://192.168.99.3
     vlan: MGMT
+    snmp_enabled: false
     check:
       type: ping
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+import json
 import time
 from typing import Any
 
@@ -195,6 +196,7 @@ async def _infrastructure_status(entry: dict[str, Any], defaults: dict[str, Any]
         "web_url": _known(web_url),
         "web_url_source": web_url_source,
         "vlan": _known(entry.get("vlan")),
+        "snmp_enabled": entry.get("snmp_enabled", True),
         "status": check["status"],
         "check": check,
     }
@@ -208,6 +210,9 @@ async def _vlan_status(entry: dict[str, Any], defaults: dict[str, Any]) -> dict[
         "name": _known(entry.get("name")),
         "subnet": _known(entry.get("subnet")),
         "gateway": _known(gateway),
+        "color": _known(entry.get("color")),
+        "color_dark": _known(entry.get("color_dark") or entry.get("dark")),
+        "text_color": _known(entry.get("text_color") or entry.get("text")),
         "gateway_status": check["status"],
         "gateway_check": check,
     }
@@ -447,6 +452,9 @@ def _group_devices_by_vlan(vlans: list[dict[str, Any]], devices: list[dict[str, 
                 "name": _known(vlan_name),
                 "subnet": _known(vlan.get("subnet")),
                 "gateway": _known(vlan.get("gateway")),
+                "color": _known(vlan.get("color")),
+                "color_dark": _known(vlan.get("color_dark") or vlan.get("dark")),
+                "text_color": _known(vlan.get("text_color") or vlan.get("text")),
                 "counts": counts,
                 "devices": members,
             }
@@ -535,6 +543,304 @@ def _apply_snmp_locations(devices: list[dict[str, Any]], snmp: dict[str, Any]) -
             prepared["discovery_sources"] = _unique_sources([*prepared.get("discovery_sources", []), "snmp_fdb"])
         updated.append(prepared)
     return updated
+
+
+def _normal_mac(value: Any) -> str:
+    return str(value or "").strip().lower().replace("-", ":")
+
+
+async def _arp_neighbors() -> dict[str, str]:
+    try:
+        process = await asyncio.create_subprocess_exec(
+            "ip",
+            "neigh",
+            "show",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _stderr = await asyncio.wait_for(process.communicate(), timeout=2)
+    except Exception:
+        return {}
+    if process.returncode != 0:
+        return {}
+
+    neighbors: dict[str, str] = {}
+    for line in stdout.decode(errors="replace").splitlines():
+        parts = line.split()
+        if len(parts) < 5 or "lladdr" not in parts:
+            continue
+        ip_address = parts[0]
+        mac_index = parts.index("lladdr") + 1
+        if mac_index < len(parts):
+            neighbors[ip_address] = _normal_mac(parts[mac_index])
+
+    try:
+        local_process = await asyncio.create_subprocess_exec(
+            "ip",
+            "-j",
+            "addr",
+            "show",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        local_stdout, _local_stderr = await asyncio.wait_for(local_process.communicate(), timeout=2)
+        if local_process.returncode == 0:
+            for interface in json.loads(local_stdout.decode(errors="replace")):
+                mac = _normal_mac(interface.get("address"))
+                if not _is_known(mac):
+                    continue
+                for address in interface.get("addr_info") or []:
+                    if address.get("family") == "inet" and _is_known(address.get("local")):
+                        neighbors[str(address["local"])] = mac
+    except Exception:
+        pass
+    return neighbors
+
+
+def _apply_arp_neighbors(devices: list[dict[str, Any]], neighbors: dict[str, str]) -> list[dict[str, Any]]:
+    updated: list[dict[str, Any]] = []
+    for device in devices:
+        prepared = dict(device)
+        ip_address = str(prepared.get("ip_address") or "")
+        mac = neighbors.get(ip_address)
+        if mac and not _is_known(prepared.get("mac_address")):
+            prepared["mac_address"] = mac.upper()
+            prepared["mac_source"] = "arp"
+            prepared["discovery_sources"] = _unique_sources([*prepared.get("discovery_sources", []), "arp"])
+        updated.append(prepared)
+    return updated
+
+
+def _switch_entries(config: dict[str, Any], infrastructure: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    configured = config.get("switches") or []
+    if configured:
+        return [dict(entry) for entry in configured if isinstance(entry, dict)]
+
+    switches: list[dict[str, Any]] = []
+    for item in infrastructure:
+        role = str(item.get("role") or item.get("name") or "").lower()
+        if "switch" in role:
+            switches.append(
+                {
+                    "id": item.get("id"),
+                    "name": item.get("name"),
+                    "model": item.get("model"),
+                    "ip_address": item.get("ip_address"),
+                    "port_count": 48 if "foh" in role else 16,
+                    "ports": {},
+                }
+            )
+    return switches
+
+
+def _port_number_from_snmp(port: dict[str, Any]) -> str:
+    for key in ("name", "description", "if_index"):
+        value = str(port.get(key) or "")
+        if value.isdigit():
+            return str(int(value))
+        match = None
+        for part in value.replace("/", " ").replace("-", " ").split():
+            if part.isdigit():
+                match = part
+        if match:
+            return str(int(match))
+        digits = "".join(char for char in value if char.isdigit())
+        if digits:
+            return str(int(digits))
+    return UNKNOWN_LABEL
+
+
+def _port_type(manual: dict[str, Any]) -> str:
+    prepared = str(manual.get("type") or manual.get("role") or "unknown").lower()
+    if "downstream" in prepared:
+        return "downstream"
+    if "trunk" in prepared or "uplink" in prepared:
+        return "trunk"
+    if "mgmt" in prepared or "management" in prepared:
+        return "mgmt"
+    if "access" in prepared:
+        return "access"
+    return "unknown"
+
+
+def _is_direct_port(port_type: str, manual: dict[str, Any]) -> bool:
+    if bool(manual.get("uplink")):
+        return False
+    return port_type in {"access", "mgmt"}
+
+
+def _vlan_name_by_id(config: dict[str, Any]) -> dict[str, str]:
+    return {str(vlan.get("id")): str(vlan.get("name")) for vlan in config.get("vlans") or [] if vlan.get("id") is not None}
+
+
+def _device_lookup_by_mac(devices: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    return {
+        _normal_mac(device.get("mac_address")): device
+        for device in devices
+        if _is_known(device.get("mac_address"))
+    }
+
+
+def _snmp_ports_by_number(snmp_info: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    result: dict[str, dict[str, Any]] = {}
+    for port in snmp_info.get("ports") or []:
+        number = _port_number_from_snmp(port)
+        if _is_known(number):
+            result[number] = port
+    return result
+
+
+def _vlan_lists_for_port(snmp_info: dict[str, Any], port_number: str) -> tuple[list[str], list[str], list[str], str]:
+    vlans = snmp_info.get("vlans") or {}
+    tagged: list[str] = []
+    untagged: list[str] = []
+    membership: list[str] = []
+    for vlan_id, vlan in vlans.items():
+        vlan_text = str(vlan_id)
+        members = {str(port) for port in vlan.get("member_ports") or []}
+        untagged_ports = {str(port) for port in vlan.get("untagged_ports") or []}
+        if str(port_number) in members:
+            membership.append(vlan_text)
+            if str(port_number) in untagged_ports:
+                untagged.append(vlan_text)
+            else:
+                tagged.append(vlan_text)
+    pvid = (snmp_info.get("pvids") or {}).get(str(port_number), UNKNOWN_LABEL)
+    return membership, tagged, untagged, str(pvid)
+
+
+def _fdb_by_port(snmp_info: dict[str, Any]) -> dict[str, dict[str, list[dict[str, Any]]]]:
+    ports: dict[str, dict[str, list[dict[str, Any]]]] = {}
+    for mac, observations in (snmp_info.get("fdb_observations") or {}).items():
+        for observation in observations:
+            port_number = str(observation.get("port_number") or observation.get("bridge_port") or observation.get("port") or "")
+            vlan_id = str(observation.get("vlan_id") or UNKNOWN_LABEL)
+            ports.setdefault(port_number, {}).setdefault(vlan_id, []).append(
+                {
+                    "mac_address": mac.upper(),
+                    "source": observation.get("source", "snmp"),
+                    "direct": bool(observation.get("trusted_edge") and not observation.get("uplink")),
+                }
+            )
+    return ports
+
+
+def _learned_mac_groups(
+    learned_by_vlan: dict[str, list[dict[str, Any]]],
+    vlan_names: dict[str, str],
+    devices_by_mac: dict[str, dict[str, Any]],
+    direct_port: bool,
+) -> list[dict[str, Any]]:
+    groups: list[dict[str, Any]] = []
+    for vlan_id in sorted(learned_by_vlan, key=lambda value: int(value) if value.isdigit() else 9999):
+        entries: list[dict[str, Any]] = []
+        for entry in sorted(learned_by_vlan[vlan_id], key=lambda item: item["mac_address"]):
+            device = devices_by_mac.get(_normal_mac(entry["mac_address"]))
+            entries.append(
+                {
+                    "mac_address": entry["mac_address"],
+                    "device": device.get("display_name") if device else UNKNOWN_LABEL,
+                    "ip_address": device.get("ip_address") if device else UNKNOWN_LABEL,
+                    "direct": bool(direct_port and entry.get("direct")),
+                    "source": entry.get("source", "snmp"),
+                }
+            )
+        groups.append(
+            {
+                "vlan_id": vlan_id,
+                "vlan_name": vlan_names.get(vlan_id, UNKNOWN_LABEL),
+                "macs": entries,
+            }
+        )
+    return groups
+
+
+def _build_switches(
+    config: dict[str, Any],
+    infrastructure: list[dict[str, Any]],
+    devices: list[dict[str, Any]],
+    snmp: dict[str, Any],
+) -> list[dict[str, Any]]:
+    infra_by_id = {str(item.get("id")): item for item in infrastructure}
+    snmp_by_id = snmp.get("devices") or {}
+    vlan_names = _vlan_name_by_id(config)
+    devices_by_mac = _device_lookup_by_mac(devices)
+    switches: list[dict[str, Any]] = []
+
+    for entry in _switch_entries(config, infrastructure):
+        switch_id = str(entry.get("id") or _slug(entry.get("name")))
+        infra = infra_by_id.get(switch_id, {})
+        snmp_info = snmp_by_id.get(switch_id) or {}
+        snmp_ports = _snmp_ports_by_number(snmp_info)
+        fdb_ports = _fdb_by_port(snmp_info)
+        manual_ports = {str(key): value or {} for key, value in (entry.get("ports") or {}).items()}
+        port_count = int(entry.get("port_count") or max([int(key) for key in manual_ports if key.isdigit()] or [0]) or 0)
+        port_count = max(port_count, max([int(key) for key in snmp_ports if key.isdigit()] or [0]))
+        ports: list[dict[str, Any]] = []
+
+        for number in range(1, port_count + 1):
+            key = str(number)
+            manual = manual_ports.get(key, {})
+            snmp_port = snmp_ports.get(key, {})
+            learned_by_vlan = fdb_ports.get(key, {})
+            snmp_membership, tagged_vlans, untagged_vlans, snmp_pvid = _vlan_lists_for_port(snmp_info, key)
+            port_type = _port_type(manual)
+            direct_port = _is_direct_port(port_type, manual)
+            learned_groups = _learned_mac_groups(learned_by_vlan, vlan_names, devices_by_mac, direct_port)
+            learned_count = sum(len(group["macs"]) for group in learned_groups)
+            direct_devices = [
+                entry
+                for group in learned_groups
+                for entry in group["macs"]
+                if entry.get("direct") and _is_known(entry.get("device"))
+            ]
+            errors = (snmp_port.get("in_errors") or 0) + (snmp_port.get("out_errors") or 0)
+            ports.append(
+                {
+                    "number": key,
+                    "label": _display_value(manual.get("label")),
+                    "role": _display_value(manual.get("role")),
+                    "type": port_type,
+                    "expected_vlans": snmp_membership or manual.get("expected_vlans") or [],
+                    "tagged_vlans": tagged_vlans,
+                    "untagged_vlans": untagged_vlans,
+                    "native_vlan": _display_value((untagged_vlans[0] if untagged_vlans else None) or manual.get("native_vlan")),
+                    "pvid": _display_value(snmp_pvid if _is_known(snmp_pvid) else manual.get("pvid")),
+                    "vlan_source": "snmp_q_bridge" if snmp_membership or _is_known(snmp_pvid) else "config",
+                    "uplink": bool(manual.get("uplink") or port_type in {"trunk", "downstream"}),
+                    "notes": _display_value(manual.get("notes")),
+                    "link_state": _display_value(snmp_port.get("oper_status")),
+                    "admin_state": _display_value(snmp_port.get("admin_status")),
+                    "speed_mbps": snmp_port.get("speed_mbps"),
+                    "in_octets": snmp_port.get("in_octets"),
+                    "out_octets": snmp_port.get("out_octets"),
+                    "in_errors": snmp_port.get("in_errors"),
+                    "out_errors": snmp_port.get("out_errors"),
+                    "errors": errors,
+                    "learned_mac_count": learned_count,
+                    "learned_macs_by_vlan": learned_groups,
+                    "mapped_devices": direct_devices,
+                    "source": "snmp+config" if snmp_port or learned_count else "config",
+                }
+            )
+
+        switches.append(
+            {
+                "id": switch_id,
+                "name": _display_value(entry.get("name") or infra.get("name")),
+                "model": _display_value(entry.get("model") or infra.get("model")),
+                "ip_address": _display_value(entry.get("ip_address") or infra.get("ip_address")),
+                "status": infra.get("status", UNKNOWN),
+                "snmp_status": snmp_info.get("status", "manual") if snmp_info else "manual",
+                "sys_descr": _display_value(snmp_info.get("sys_descr")),
+                "uptime": _display_value(snmp_info.get("uptime")),
+                "port_count": port_count,
+                "layout": entry.get("layout") or {},
+                "ports": ports,
+                "vlans": list((snmp_info.get("vlans") or {}).values()),
+            }
+        )
+    return switches
 
 
 def _vlan_label(device: dict[str, Any]) -> str:
@@ -811,11 +1117,16 @@ async def _build_snapshot_uncached() -> dict[str, Any]:
         _internet_status(config, defaults),
         discover_devices(config),
     )
-    devices = await _devices_status(config, defaults, discovery)
+    devices, arp_neighbors = await asyncio.gather(
+        _devices_status(config, defaults, discovery),
+        _arp_neighbors(),
+    )
+    devices = _apply_arp_neighbors(devices, arp_neighbors)
     devices = _apply_infrastructure_status(devices, infrastructure)
     snmp = await poll_snmp(config, infrastructure)
     infrastructure = _apply_snmp_to_infrastructure(infrastructure, snmp)
     devices = _apply_snmp_locations(devices, snmp)
+    switches = _build_switches(config, infrastructure, devices, snmp)
     devices_by_vlan = _group_devices_by_vlan(config.get("vlans", []), devices)
     warnings = _build_warnings(infrastructure, internet, vlans, devices, discovery)
     topology = _build_topology(infrastructure, internet, devices_by_vlan, warnings, devices)
@@ -823,11 +1134,13 @@ async def _build_snapshot_uncached() -> dict[str, Any]:
     return {
         "generated_at": utc_now(),
         "station": config.get("station") or {},
+        "ui": config.get("ui") or {},
         "infrastructure": infrastructure,
         "internet": internet,
         "vlans": vlans,
         "devices": devices,
         "devices_by_vlan": devices_by_vlan,
+        "switches": switches,
         "discovery": {
             key: value
             for key, value in discovery.items()
@@ -885,6 +1198,15 @@ async def build_topology(force_refresh: bool = False) -> dict[str, Any]:
     return {
         "generated_at": snapshot["generated_at"],
         "topology": snapshot["topology"],
+    }
+
+
+async def build_switches(force_refresh: bool = False) -> dict[str, Any]:
+    snapshot = await build_snapshot(force_refresh=force_refresh)
+    return {
+        "generated_at": snapshot["generated_at"],
+        "switches": snapshot.get("switches") or [],
+        "snmp": snapshot.get("snmp") or {},
     }
 
 

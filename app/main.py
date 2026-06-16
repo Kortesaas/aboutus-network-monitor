@@ -7,14 +7,14 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .config import ConfigError
-from .status_service import build_devices, build_history, build_status, build_topology
+from .status_service import build_devices, build_history, build_status, build_switches, build_topology
 
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 app = FastAPI(
     title="ABOUTUS Network Monitor",
-    version="0.7.0",
+    version="0.8.0",
     docs_url="/api/docs",
     redoc_url=None,
 )
@@ -62,6 +62,7 @@ async def api_status(refresh: bool = False) -> dict:
             "vlans": [],
             "devices": [],
             "devices_by_vlan": [],
+            "switches": [],
             "discovery": {"enabled": False, "status": "error", "errors": [str(exc)]},
             "topology": {"nodes": [], "links": [], "warnings": []},
             "snmp": {"enabled": False, "status": "error", "errors": []},
@@ -91,6 +92,19 @@ async def api_topology(refresh: bool = False) -> dict:
         return {
             "generated_at": None,
             "topology": {"nodes": [], "links": [], "warnings": []},
+            "error": str(exc),
+        }
+
+
+@app.get("/api/switches")
+async def api_switches(refresh: bool = False) -> dict:
+    try:
+        return await build_switches(force_refresh=refresh)
+    except ConfigError as exc:
+        return {
+            "generated_at": None,
+            "switches": [],
+            "snmp": {"enabled": False, "status": "error", "errors": []},
             "error": str(exc),
         }
 

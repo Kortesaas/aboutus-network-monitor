@@ -1,4 +1,4 @@
-const APP_VERSION = "0.7.0";
+const APP_VERSION = "0.8.0";
 const SETTINGS_KEY = "aboutus-network-monitor-ui-settings-v3";
 const COLLAPSE_KEY = "aboutus-network-monitor-collapsed-vlans-v3";
 const OPEN_DEVICES_KEY = "aboutus-network-monitor-open-devices-v4";
@@ -22,6 +22,9 @@ const PAGE_META = {
   },
   topology: {
     title: "Topology",
+  },
+  switches: {
+    title: "Switches",
   },
   settings: {
     title: "Settings",
@@ -54,6 +57,7 @@ const state = {
   collapsedVlans: loadCollapsedVlans(),
   openDevices: loadOpenDevices(),
   filters: loadFilters(),
+  selectedPorts: {},
   seenEventKeys: new Set(),
   eventListInitialized: false,
 };
@@ -738,7 +742,7 @@ function topologyVlanNode(group, data) {
   const status = vlanStatus(group, data);
   return el("button", {
     className: `topology-vlan-node ${statusClass(status)}`,
-    attrs: { type: "button", "data-vlan-link": group.id },
+    attrs: { type: "button", "data-vlan-link": group.id, style: vlanStyle(groupVlanId(group)) },
   }, [
     statusDot(status),
     el("span", { className: "topology-vlan-icon", html: icon(vlanIconName(group.name)) }),
@@ -790,6 +794,46 @@ function vlanIconName(name) {
   return "topology";
 }
 
+function configuredVlanColor(vlan, shade = "color") {
+  const id = String(vlan ?? "");
+  const palette = state.status?.ui?.vlan_colors || {};
+  const entry = palette[id] || {};
+  const fallback = {
+    10: { color: "#0d8df2", dark: "#07579f", text: "#ffffff" },
+    20: { color: "#00c822", dark: "#00750d", text: "#ffffff" },
+    30: { color: "#df1726", dark: "#9b101a", text: "#ffffff" },
+    40: { color: "#a52ab6", dark: "#681675", text: "#ffffff" },
+    50: { color: "#ef790d", dark: "#844500", text: "#ffffff" },
+    99: { color: "#f4f5f7", dark: "#cfd4da", text: "#101820" },
+  }[Number(vlan)] || { color: "#27303a", dark: "#151a21", text: "#a8b3bf" };
+  return entry[shade] || fallback[shade] || fallback.color;
+}
+
+function roleColor(role, shade = "color") {
+  const key = normalize(role);
+  const roles = state.status?.ui?.port_role_colors || {};
+  const fallback = {
+    stage: { color: "#f3d21b", dark: "#b79700", text: "#090909" },
+    router: { color: "#050505", dark: "#000000", text: "#f3d21b" },
+    trunk: { color: "#f3d21b", dark: "#b79700", text: "#090909" },
+    unknown: { color: "#27303a", dark: "#151a21", text: "#a8b3bf" },
+  };
+  const roleKey = key.includes("router") ? "router" : key.includes("stage") || key.includes("downstream") ? "stage" : key.includes("trunk") ? "trunk" : "unknown";
+  return (roles[roleKey] || fallback[roleKey] || fallback.unknown)[shade];
+}
+
+function vlanStyle(vlan) {
+  return [
+    `--vlan-color: ${configuredVlanColor(vlan, "color")}`,
+    `--vlan-dark: ${configuredVlanColor(vlan, "dark")}`,
+    `--vlan-text: ${configuredVlanColor(vlan, "text")}`,
+  ].join("; ");
+}
+
+function groupVlanId(group) {
+  return group?.id ?? group?.vlan_id ?? group?.vlan;
+}
+
 function vlanStatus(group, data) {
   const vlan = (data.vlans || []).find((item) => item.id === group.id);
   return vlan?.gateway_status || (group.counts?.offline ? "warning" : "online");
@@ -799,7 +843,7 @@ function vlanSummaryCard(group, data) {
   const status = vlanStatus(group, data);
   const card = el("button", {
     className: "vlan-summary-card",
-    attrs: { type: "button", "data-vlan-link": group.id },
+    attrs: { type: "button", "data-vlan-link": group.id, style: vlanStyle(groupVlanId(group)) },
   }, [
     el("div", { className: "vlan-summary-head" }, [
       el("span", { className: "vlan-icon", html: icon(vlanIconName(group.name)) }),
@@ -961,6 +1005,7 @@ function deviceGroup(group) {
       "data-vlan-toggle": group.id,
       "aria-expanded": collapsed ? "false" : "true",
       title: collapsed ? "Expand VLAN group" : "Collapse VLAN group",
+      style: vlanStyle(groupVlanId(group)),
     },
   }, [
     el("span", { className: "chevron", html: icon("chevron") }),
@@ -1239,7 +1284,7 @@ function vlanLane(group, data) {
   const status = vlanStatus(group, data);
   return el("button", {
     className: "vlan-lane",
-    attrs: { type: "button", "data-vlan-link": group.id },
+    attrs: { type: "button", "data-vlan-link": group.id, style: vlanStyle(groupVlanId(group)) },
   }, [
     el("span", { className: "vlan-icon", html: icon(vlanIconName(group.name)) }),
     el("div", {}, [
@@ -1248,6 +1293,428 @@ function vlanLane(group, data) {
     ]),
     statusDot(status),
   ]);
+}
+
+function renderSwitchesPage(data) {
+  const switches = data.switches || [];
+  if (switches.length === 0) {
+    elements.pageContent.append(emptyState("No switch layouts configured."));
+    return;
+  }
+
+  elements.pageContent.append(
+    vlanLegend(data),
+    el("section", { className: "switch-page-grid" }, switches.map(switchFaceplate)),
+  );
+}
+
+function vlanLegend(data) {
+  const vlans = data.vlans || [];
+  return el("section", { className: "vlan-legend" }, vlans.map((vlan) => el("button", {
+    className: "vlan-legend-item",
+    attrs: {
+      type: "button",
+      "data-vlan-link": vlan.id,
+      style: vlanStyle(vlan.id),
+      title: `${vlan.name} / VLAN ${vlan.id}`,
+    },
+  }, [
+    el("span", { className: "legend-swatch" }),
+    el("span", {}, [
+      el("strong", { text: vlan.name }),
+      el("small", { text: `VLAN ${vlan.id}` }),
+    ]),
+  ])));
+}
+
+function switchFaceplate(switchItem) {
+  if (isAlliedGs95048(switchItem)) {
+    return alliedGs950Faceplate(switchItem);
+  }
+  if (isTpLinkSg1016(switchItem)) {
+    return tpLinkSg1016Faceplate(switchItem);
+  }
+
+  const ports = switchItem.ports || [];
+  const columns = Number(switchItem.layout?.columns || (switchItem.port_count > 24 ? 24 : 8));
+  const portGrid = el("div", { className: "switch-port-grid" }, ports.map((port) => portButton(switchItem, port)));
+  portGrid.style.setProperty("--port-columns", columns);
+
+  return el("article", { className: "switch-faceplate" }, [
+    el("div", { className: "switch-faceplate-head" }, [
+      el("span", { className: "topology-icon", html: icon("switch") }),
+      el("div", {}, [
+        el("strong", { text: switchItem.name }),
+        el("span", { text: `${text(switchItem.model)} / ${text(switchItem.ip_address)}` }),
+      ]),
+      el("div", { className: "switch-faceplate-meta" }, [
+        statusPill(switchItem.status),
+        badge(`${switchItem.ports?.length || 0} ports`, "neutral"),
+      ]),
+    ]),
+    el("div", { className: "switch-system-line" }, [
+      el("span", { text: `SNMP ${text(switchItem.snmp_status)}` }),
+      el("span", { text: `Uptime ${text(switchItem.uptime)}` }),
+      el("span", { text: text(switchItem.sys_descr) }),
+    ]),
+    portGrid,
+    ...switchPortInsight(switchItem),
+  ]);
+}
+
+function isAlliedGs95048(switchItem) {
+  return String(switchItem.id) === "foh-switch" || normalize(switchItem.model).includes("at-gs950/48");
+}
+
+function isTpLinkSg1016(switchItem) {
+  const model = normalize(switchItem.model);
+  return String(switchItem.id) === "stage-switch" || model.includes("tl-sg1016") || model.includes("sg1016");
+}
+
+function alliedGs950Faceplate(switchItem) {
+  const portMap = portsByNumber(switchItem);
+  return el("article", { className: "switch-faceplate allied-faceplate" }, [
+    el("div", { className: "allied-panel" }, [
+      el("div", { className: "allied-left-panel" }, [
+        el("div", { className: "allied-brand-row" }, [
+          el("strong", { text: "Allied Telesis" }),
+          el("span", { text: "AT-GS950/48 Gigabit Ethernet Switch" }),
+        ]),
+        el("div", { className: "allied-led-area" }, [
+          el("span", { text: "PORT ACTIVITY" }),
+          el("span", { text: "LINK  ACT" }),
+          el("span", { className: "eco-led", text: "ECO" }),
+          el("i", { className: "panel-led on" }),
+          el("small", { text: "SYSTEM" }),
+        ]),
+      ]),
+      el("div", { className: "allied-copper-area" }, [
+        alliedPortBlock(switchItem, portMap, [1, 3, 5, 7, 9, 11], [2, 4, 6, 8, 10, 12]),
+        alliedPortBlock(switchItem, portMap, [13, 15, 17, 19, 21, 23], [14, 16, 18, 20, 22, 24]),
+        alliedPortBlock(switchItem, portMap, [25, 27, 29, 31, 33, 35], [26, 28, 30, 32, 34, 36]),
+        alliedPortBlock(
+          switchItem,
+          portMap,
+          [37, 39, 41, 43, 45, 47],
+          [38, 40, 42, 44, 46, 48],
+          { comboCopper: true },
+        ),
+      ]),
+      el("div", { className: "allied-sfp-area" }, [
+        el("span", { className: "sfp-label", text: "SFP" }),
+        el("div", { className: "sfp-grid" }, [
+          portButton(switchItem, portMap.get("45"), { displayNumber: "45", media: "sfp" }),
+          portButton(switchItem, portMap.get("47"), { displayNumber: "47", media: "sfp" }),
+          portButton(switchItem, portMap.get("46"), { displayNumber: "46", media: "sfp" }),
+          portButton(switchItem, portMap.get("48"), { displayNumber: "48", media: "sfp" }),
+        ]),
+      ]),
+    ]),
+    el("div", { className: "switch-system-line" }, [
+      el("span", { text: `SNMP ${text(switchItem.snmp_status)}` }),
+      el("span", { text: `Uptime ${text(switchItem.uptime)}` }),
+      el("span", { text: text(switchItem.sys_descr) }),
+    ]),
+    ...switchPortInsight(switchItem),
+  ]);
+}
+
+function tpLinkSg1016Faceplate(switchItem) {
+  const portMap = portsByNumber(switchItem);
+  return el("article", { className: "switch-faceplate tplink-faceplate" }, [
+    el("div", { className: "tplink-panel" }, [
+      el("div", { className: "tplink-left-panel" }, [
+        el("div", { className: "tplink-brand-row" }, [
+          el("strong", { text: "TP-Link" }),
+          el("span", { text: "TL-SG1016PE" }),
+        ]),
+        el("div", { className: "tplink-led-area" }, [
+          el("span", { text: "PORT STATUS" }),
+          el("span", { text: "LINK / ACT" }),
+          el("i", { className: "panel-led on" }),
+          el("small", { text: "SYSTEM" }),
+        ]),
+      ]),
+      el("div", { className: "tplink-port-area" }, [
+        tpLinkPortBlock(switchItem, portMap, [1, 3, 5, 7], [2, 4, 6, 8]),
+        tpLinkPortBlock(switchItem, portMap, [9, 11, 13, 15], [10, 12, 14, 16]),
+      ]),
+    ]),
+    el("div", { className: "switch-system-line" }, [
+      el("span", { text: `SNMP ${text(switchItem.snmp_status)}` }),
+      el("span", { text: text(switchItem.sys_descr || switchItem.model) }),
+    ]),
+    ...switchPortInsight(switchItem),
+  ]);
+}
+
+function portsByNumber(switchItem) {
+  return new Map((switchItem.ports || []).map((port) => [String(port.number), port]));
+}
+
+function alliedPortBlock(switchItem, portMap, topPorts, bottomPorts, options = {}) {
+  const copperLabel = (number) => options.comboCopper && number >= 45 ? `${number}R` : String(number);
+  return el("div", { className: "allied-port-block" }, [
+    el("div", { className: "allied-port-row top" }, topPorts.map((number) => portButton(switchItem, portMap.get(String(number)), {
+      displayNumber: copperLabel(number),
+      media: "copper",
+    }))),
+    el("div", { className: "allied-port-row bottom" }, bottomPorts.map((number) => portButton(switchItem, portMap.get(String(number)), {
+      displayNumber: copperLabel(number),
+      media: "copper",
+    }))),
+  ]);
+}
+
+function tpLinkPortBlock(switchItem, portMap, topPorts, bottomPorts) {
+  return el("div", { className: "tplink-port-block" }, [
+    el("div", { className: "tplink-port-row top" }, topPorts.map((number) => portButton(switchItem, portMap.get(String(number)), {
+      displayNumber: number,
+      media: "copper",
+    }))),
+    el("div", { className: "tplink-port-row bottom" }, bottomPorts.map((number) => portButton(switchItem, portMap.get(String(number)), {
+      displayNumber: number,
+      media: "copper",
+    }))),
+  ]);
+}
+
+function portButton(switchItem, port, options = {}) {
+  if (!port) {
+    return el("span", { className: "switch-port missing-port" });
+  }
+  const key = switchPortKey(switchItem.id, port.number);
+  const selected = selectedPortKeyForSwitch(switchItem.id) === key;
+  const displayNumber = options.displayNumber || port.number;
+  const classes = [
+    "switch-port",
+    options.media ? `media-${options.media}` : "",
+    `type-${normalize(port.type).replaceAll(" ", "-")}`,
+    port.link_state === "up" ? "link-up" : port.link_state === "down" ? "link-down" : "link-unknown",
+    port.learned_mac_count > 0 ? "has-macs" : "",
+    selected ? "selected" : "",
+  ].filter(Boolean).join(" ");
+  return el("button", {
+    className: classes,
+    attrs: {
+      type: "button",
+      "data-switch-port": key,
+      title: portTooltip(switchItem, port),
+      style: portStyle(port),
+    },
+  }, [
+    el("span", { className: "port-number", text: displayNumber }),
+    el("span", { className: "port-jack", attrs: { "aria-hidden": "true" } }, [
+      el("span", { className: "jack-notch" }),
+      el("span", { className: "jack-cavity" }),
+      el("span", { className: "jack-pins" }),
+      el("span", { className: "port-led link-led" }),
+      el("span", { className: "port-led activity-led" }),
+    ]),
+    el("span", { className: "port-label", text: isUnknown(port.label) ? port.type : port.label }),
+    port.expected_vlans?.length
+      ? el("span", { className: "port-vlan-strip" }, port.expected_vlans.slice(0, 6).map((vlan) => el("i", {
+        attrs: { style: `--vlan-color: ${configuredVlanColor(vlan, "color")}` },
+      })))
+      : el("span"),
+  ]);
+}
+
+function portStyle(port) {
+  const color = portColor(port);
+  return [
+    `--port-color: ${color.color}`,
+    `--port-dark: ${color.dark}`,
+    `--port-text: ${color.text}`,
+  ].join("; ");
+}
+
+function portColor(port) {
+  const number = Number(port?.number);
+  if (number === 47 || normalize(port?.role).includes("router")) {
+    return {
+      color: roleColor("router", "color"),
+      dark: roleColor("router", "dark"),
+      text: roleColor("router", "text"),
+    };
+  }
+  if ((number >= 41 && number <= 46) || normalize(port?.type).includes("downstream") || normalize(port?.role).includes("stage")) {
+    return {
+      color: roleColor("stage", "color"),
+      dark: roleColor("stage", "dark"),
+      text: roleColor("stage", "text"),
+    };
+  }
+  if (normalize(port?.type).includes("trunk") || normalize(port?.role).includes("uplink")) {
+    return {
+      color: roleColor("trunk", "color"),
+      dark: roleColor("trunk", "dark"),
+      text: roleColor("trunk", "text"),
+    };
+  }
+  const vlan = (port?.untagged_vlans || [])[0] || port?.pvid || (port?.expected_vlans || [])[0];
+  return {
+    color: configuredVlanColor(vlan, "color"),
+    dark: configuredVlanColor(vlan, "dark"),
+    text: configuredVlanColor(vlan, "text"),
+  };
+}
+
+function switchPortKey(switchId, portNumber) {
+  return `${switchId}:${portNumber}`;
+}
+
+function selectedPortKeyForSwitch(switchId) {
+  return state.selectedPorts?.[String(switchId)] || null;
+}
+
+function selectedSwitchPortForSwitch(switchItem) {
+  const key = selectedPortKeyForSwitch(switchItem.id);
+  if (!key) {
+    return null;
+  }
+  const [switchId, portNumber] = key.split(":");
+  if (String(switchItem.id) !== switchId) {
+    return null;
+  }
+  const port = (switchItem.ports || []).find((item) => String(item.number) === String(portNumber));
+  return port ? { switchItem, port } : null;
+}
+
+function switchPortInsight(switchItem) {
+  const selected = selectedSwitchPortForSwitch(switchItem);
+  return selected ? [portDetailPanel(selected)] : [];
+}
+
+function portTooltip(switchItem, port) {
+  return [
+    `${switchItem.name} / Port ${port.number}`,
+    `State: ${text(port.link_state)}`,
+    `Speed: ${port.speed_mbps ? `${port.speed_mbps} Mbps` : "Unknown"}`,
+    `Role: ${text(port.role)}`,
+    `VLANs: ${port.expected_vlans?.length ? port.expected_vlans.join(", ") : "Unknown"}`,
+    `MACs: ${port.learned_mac_count || 0}`,
+  ].join("\n");
+}
+
+function portDetailPanel(selected) {
+  if (!selected) {
+    return el("aside", { className: "port-detail-panel empty" }, [
+      el("div", { className: "port-detail-empty" }, [
+        el("span", { html: icon("switch") }),
+        el("strong", { text: "Select a port" }),
+      ]),
+    ]);
+  }
+
+  const { switchItem, port } = selected;
+  return el("aside", { className: "port-detail-panel" }, [
+    el("div", { className: "port-detail-head" }, [
+      el("div", {}, [
+        el("span", { className: "summary-label", text: switchItem.name }),
+        el("h3", { text: `Port ${port.number}` }),
+      ]),
+      statusPill(port.link_state === "up" ? "online" : port.link_state === "down" ? "offline" : "unknown"),
+    ]),
+    el("div", { className: "port-detail-groups" }, [
+      detailGroup("Port", "switch", [
+        detailItem("Label", port.label),
+        detailItem("Role", port.role),
+        detailItem("Type", port.type),
+        detailItem("Notes", port.notes),
+      ]),
+      detailGroup("Link", "network", [
+        detailItem("State", port.link_state),
+        detailItem("Admin", port.admin_state),
+        detailItem("Speed", port.speed_mbps ? `${port.speed_mbps} Mbps` : "Unknown"),
+        detailItem("Source", port.source),
+      ]),
+      detailGroup("VLAN", vlanIconName(String(port.expected_vlans?.[0] || "")), [
+        detailItem("Membership", port.expected_vlans?.length ? port.expected_vlans.join(", ") : "Unknown"),
+        detailItem("Tagged", port.tagged_vlans?.length ? port.tagged_vlans.join(", ") : "None"),
+        detailItem("Untagged", port.untagged_vlans?.length ? port.untagged_vlans.join(", ") : "None"),
+        detailItem("Native", port.native_vlan),
+        detailItem("PVID", port.pvid),
+        detailItem("VLAN source", port.vlan_source),
+        detailItem("Mode", port.uplink ? "uplink/trunk" : port.type),
+      ]),
+      detailGroup("Traffic", "history", [
+        detailItem("RX bytes", formatBytes(port.in_octets)),
+        detailItem("TX bytes", formatBytes(port.out_octets)),
+        detailItem("RX errors", port.in_errors ?? "Unknown"),
+        detailItem("TX errors", port.out_errors ?? "Unknown"),
+      ]),
+    ]),
+    macLearningPanel(port),
+    mappedDevicesPanel(port),
+  ]);
+}
+
+function macLearningPanel(port) {
+  const groups = port.learned_macs_by_vlan || [];
+  return el("section", { className: "port-mac-panel" }, [
+    sectionTitle("Learned MACs"),
+    groups.length
+      ? el("div", { className: "mac-vlan-groups" }, groups.map(macVlanGroup))
+      : el("div", { className: "compact-empty", text: "No learned MACs" }),
+  ]);
+}
+
+function macVlanGroup(group) {
+  return el("div", { className: "mac-vlan-group" }, [
+    el("div", { className: "mac-vlan-title" }, [
+      el("span", { text: `${text(group.vlan_name)} / VLAN ${text(group.vlan_id)}` }),
+      badge(`${group.macs?.length || 0}`, "neutral"),
+    ]),
+    el("div", { className: "mac-list" }, (group.macs || []).map((entry) => el("div", { className: `mac-row ${entry.direct ? "direct" : "learned-via-trunk"}` }, [
+      el("span", { text: entry.mac_address }),
+      el("span", { text: isUnknown(entry.device) ? "Unknown device" : `${entry.device} / ${text(entry.ip_address)}` }),
+      el("span", { text: entry.direct ? "direct" : "learned" }),
+    ]))),
+  ]);
+}
+
+function mappedDevicesPanel(port) {
+  const devices = port.mapped_devices || [];
+  return el("section", { className: "port-mac-panel" }, [
+    sectionTitle("Mapped Devices"),
+    devices.length
+      ? el("div", { className: "port-device-list" }, devices.map((device) => el("button", {
+        className: "mini-device-row",
+        attrs: {
+          type: "button",
+          "data-device-focus": device.ip_address || device.device || device.mac_address,
+          "data-device-vlan": device.vlan_id || "all",
+        },
+      }, [
+        statusDot("online"),
+        el("span", {}, [
+          el("strong", { text: text(device.device) }),
+          el("span", { text: `${text(device.ip_address)} / ${text(device.mac_address)}` }),
+        ]),
+      ])))
+      : el("div", { className: "compact-empty", text: "No directly mapped devices" }),
+  ]);
+}
+
+function formatBytes(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return "Unknown";
+  }
+  if (number < 1024) return `${number} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let prepared = number / 1024;
+  let index = 0;
+  while (prepared >= 1024 && index < units.length - 1) {
+    prepared /= 1024;
+    index += 1;
+  }
+  return `${prepared.toFixed(prepared >= 100 ? 0 : 1)} ${units[index]}`;
+}
+
+function vlanColor(vlan) {
+  return configuredVlanColor(vlan, "color");
 }
 
 function renderSettings(data) {
@@ -1271,6 +1738,7 @@ function renderSettings(data) {
         readonlyLine("Discovery", `${text(discovery.status)} / ${(discovery.subnets || []).length} subnets`),
         readonlyLine("History DB", data.history?.database_path),
         readonlyLine("SNMP", `${text(snmp.status)} / ${snmp.mac_observation_count || 0} MAC observations`),
+        readonlyLine("Switches", `${(data.switches || []).length} layouts`),
         readonlyLine("Generated", formatTime(data.generated_at)),
       ]),
     ]),
@@ -1347,6 +1815,8 @@ function render() {
     renderDevices(state.status);
   } else if (state.route === "topology") {
     renderTopologyPage(state.status);
+  } else if (state.route === "switches") {
+    renderSwitchesPage(state.status);
   } else if (state.route === "settings") {
     renderSettings(state.status);
   } else {
@@ -1505,6 +1975,14 @@ function bindEvents() {
       saveFilters();
       saveOpenDevices();
       setRoute("devices");
+      return;
+    }
+
+    const switchPort = event.target.closest("[data-switch-port]");
+    if (switchPort) {
+      const [switchId] = switchPort.dataset.switchPort.split(":");
+      state.selectedPorts[String(switchId)] = switchPort.dataset.switchPort;
+      render();
       return;
     }
 

@@ -29,6 +29,11 @@ IF_ALIAS = "1.3.6.1.2.1.31.1.1.1.18"
 
 DOT1D_BASE_PORT_IF_INDEX = "1.3.6.1.2.1.17.1.4.1.2"
 DOT1D_TP_FDB_PORT = "1.3.6.1.2.1.17.4.3.1.2"
+DOT1Q_TP_FDB_PORT = "1.3.6.1.2.1.17.7.1.2.2.1.2"
+DOT1Q_VLAN_STATIC_NAME = "1.3.6.1.2.1.17.7.1.4.3.1.1"
+DOT1Q_VLAN_STATIC_EGRESS_PORTS = "1.3.6.1.2.1.17.7.1.4.3.1.2"
+DOT1Q_VLAN_STATIC_UNTAGGED_PORTS = "1.3.6.1.2.1.17.7.1.4.3.1.4"
+DOT1Q_PVID = "1.3.6.1.2.1.17.7.1.4.5.1.1"
 
 POE_PORT_POWER = "1.3.6.1.2.1.105.1.1.1.3"
 POE_PORT_STATUS = "1.3.6.1.2.1.105.1.1.1.6"
@@ -51,7 +56,9 @@ def snmp_settings(config: dict[str, Any]) -> dict[str, Any]:
         "max_parallel_hosts": max(1, int(configured.get("max_parallel_hosts") or 2)),
         "poll_interfaces": configured.get("poll_interfaces", True) is not False,
         "poll_fdb": configured.get("poll_fdb", True) is not False,
+        "poll_q_bridge": configured.get("poll_q_bridge", True) is not False,
         "poll_poe": bool(configured.get("poll_poe", False)),
+        "targets": {str(value) for value in configured.get("targets") or []},
         "trusted_edge_ports": configured.get("trusted_edge_ports") or {},
         "uplink_ports": configured.get("uplink_ports") or {},
     }
@@ -70,7 +77,15 @@ def _clean_value(value: str) -> str:
         prepared = prepared.split(" = ", 1)[1].strip()
     if ": " in prepared:
         prefix, rest = prepared.split(": ", 1)
-        if prefix.strip().isupper() or prefix.strip() in {"STRING", "INTEGER", "Counter32", "Counter64", "Gauge32", "Timeticks"}:
+        if prefix.strip().isupper() or prefix.strip() in {
+            "STRING",
+            "INTEGER",
+            "Counter32",
+            "Counter64",
+            "Gauge32",
+            "Hex-STRING",
+            "Timeticks",
+        }:
             prepared = rest
     prepared = prepared.strip().strip('"')
     if prepared.startswith("No Such"):
@@ -131,6 +146,20 @@ def _normalize_mac(value: str) -> str:
     if re.fullmatch(r"[0-9a-f]{12}", prepared):
         return ":".join(prepared[index : index + 2] for index in range(0, 12, 2))
     return prepared
+
+
+def _hex_bytes(value: Any) -> list[int]:
+    text = str(value or "")
+    return [int(match, 16) for match in re.findall(r"\b[0-9A-Fa-f]{2}\b", text)]
+
+
+def _decode_port_bitmap(value: Any) -> list[str]:
+    ports: list[str] = []
+    for byte_index, byte in enumerate(_hex_bytes(value)):
+        for bit_index in range(8):
+            if byte & (1 << (7 - bit_index)):
+                ports.append(str((byte_index * 8) + bit_index + 1))
+    return ports
 
 
 def _port_key(value: Any) -> str:
@@ -297,6 +326,75 @@ def _fdb_observations(
     return observations
 
 
+def _q_bridge_observations(
+    item: dict[str, Any],
+    settings: dict[str, Any],
+    ports: list[dict[str, Any]],
+    walks: dict[str, dict[str, str]],
+) -> dict[str, list[dict[str, Any]]]:
+    fdb = walks.get(DOT1Q_TP_FDB_PORT) or {}
+    bridge_map = walks.get(DOT1D_BASE_PORT_IF_INDEX) or {}
+    ports_by_index = {str(port["if_index"]): port for port in ports}
+    trusted_ports = _configured_ports(settings, item.get("id"), item.get("name"), "trusted_edge_ports")
+    uplink_ports = _configured_ports(settings, item.get("id"), item.get("name"), "uplink_ports")
+
+    observations: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for suffix, bridge_port_value in fdb.items():
+        parts = suffix.split(".")
+        if len(parts) < 7:
+            continue
+        vlan_id = parts[0]
+        mac_suffix = ".".join(parts[1:7])
+        bridge_port = str(_safe_int(bridge_port_value) or bridge_port_value).strip()
+        if_index = str(_safe_int(bridge_map.get(bridge_port)) or bridge_map.get(bridge_port) or bridge_port)
+        port = ports_by_index.get(if_index, {})
+        port_name = port.get("name") or bridge_port
+        port_identifiers = {_port_key(port_name), _port_key(if_index), _port_key(bridge_port)}
+        is_trusted_edge = bool(trusted_ports and port_identifiers.intersection(trusted_ports))
+        is_uplink = bool(port_identifiers.intersection(uplink_ports))
+        observations[_normalize_mac(mac_suffix)].append(
+            {
+                "switch_id": item.get("id"),
+                "switch_name": item.get("name"),
+                "switch_ip": item.get("ip_address"),
+                "port": port_name,
+                "port_number": bridge_port,
+                "if_index": if_index or UNKNOWN_LABEL,
+                "bridge_port": bridge_port,
+                "vlan_id": vlan_id,
+                "port_state": port.get("oper_status") or UNKNOWN_LABEL,
+                "source": "snmp_q_bridge",
+                "trusted_edge": is_trusted_edge,
+                "uplink": is_uplink,
+            }
+        )
+    return observations
+
+
+def _q_bridge_vlans(walks: dict[str, dict[str, str]]) -> dict[str, dict[str, Any]]:
+    names = walks.get(DOT1Q_VLAN_STATIC_NAME) or {}
+    egress = walks.get(DOT1Q_VLAN_STATIC_EGRESS_PORTS) or {}
+    untagged = walks.get(DOT1Q_VLAN_STATIC_UNTAGGED_PORTS) or {}
+    vlans: dict[str, dict[str, Any]] = {}
+    for vlan_id in sorted(set().union(names, egress, untagged), key=lambda value: int(value) if value.isdigit() else 99999):
+        vlans[str(vlan_id)] = {
+            "vlan_id": str(vlan_id),
+            "name": names.get(vlan_id) or UNKNOWN_LABEL,
+            "member_ports": _decode_port_bitmap(egress.get(vlan_id)),
+            "untagged_ports": _decode_port_bitmap(untagged.get(vlan_id)),
+        }
+    return vlans
+
+
+def _q_bridge_pvids(walks: dict[str, dict[str, str]]) -> dict[str, str]:
+    pvids: dict[str, str] = {}
+    for port, vlan in (walks.get(DOT1Q_PVID) or {}).items():
+        vlan_id = _safe_int(vlan)
+        if vlan_id is not None:
+            pvids[str(port)] = str(vlan_id)
+    return pvids
+
+
 async def _poll_host(item: dict[str, Any], settings: dict[str, Any]) -> dict[str, Any]:
     ip_address = str(item.get("ip_address") or "")
     gets = await _snmp_get(ip_address, settings, [SYS_DESCR, SYS_UPTIME, SYS_NAME])
@@ -305,21 +403,38 @@ async def _poll_host(item: dict[str, Any], settings: dict[str, Any]) -> dict[str
     walk_oids.extend([IF_HC_IN_OCTETS, IF_HC_OUT_OCTETS, IF_IN_ERRORS, IF_OUT_ERRORS])
     if settings["poll_fdb"]:
         walk_oids.extend([DOT1D_BASE_PORT_IF_INDEX, DOT1D_TP_FDB_PORT])
+    if settings["poll_q_bridge"]:
+        walk_oids.extend(
+            [
+                DOT1D_BASE_PORT_IF_INDEX,
+                DOT1Q_TP_FDB_PORT,
+                DOT1Q_VLAN_STATIC_NAME,
+                DOT1Q_VLAN_STATIC_EGRESS_PORTS,
+                DOT1Q_VLAN_STATIC_UNTAGGED_PORTS,
+                DOT1Q_PVID,
+            ]
+        )
     if settings["poll_poe"]:
         walk_oids.extend([POE_PORT_POWER, POE_PORT_STATUS])
 
     walks: dict[str, dict[str, str]] = {}
     if settings["poll_interfaces"]:
-        results = await asyncio.gather(
-            *(_snmp_walk(ip_address, settings, oid) for oid in walk_oids),
-            return_exceptions=True,
-        )
-        for oid, result in zip(walk_oids, results):
-            if not isinstance(result, Exception):
-                walks[oid] = result
+        for oid in walk_oids:
+            try:
+                walks[oid] = await _snmp_walk(ip_address, settings, oid)
+            except Exception:
+                continue
 
     uptime_seconds = _uptime_seconds(gets.get(SYS_UPTIME))
     ports = _port_rows(walks) if settings["poll_interfaces"] else []
+    fdb_observations: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    if settings["poll_fdb"]:
+        for mac, observations in _fdb_observations(item, settings, ports, walks).items():
+            fdb_observations[mac].extend(observations)
+    if settings["poll_q_bridge"]:
+        for mac, observations in _q_bridge_observations(item, settings, ports, walks).items():
+            fdb_observations[mac].extend(observations)
+
     return {
         "id": item.get("id"),
         "ip_address": ip_address,
@@ -331,7 +446,9 @@ async def _poll_host(item: dict[str, Any], settings: dict[str, Any]) -> dict[str
         "ports": ports,
         "port_count": len(ports),
         "ports_up": sum(1 for port in ports if port.get("oper_status") == "up"),
-        "fdb_observations": _fdb_observations(item, settings, ports, walks) if settings["poll_fdb"] else {},
+        "fdb_observations": dict(fdb_observations),
+        "vlans": _q_bridge_vlans(walks) if settings["poll_q_bridge"] else {},
+        "pvids": _q_bridge_pvids(walks) if settings["poll_q_bridge"] else {},
     }
 
 
@@ -365,7 +482,14 @@ async def poll_snmp(config: dict[str, Any], infrastructure: list[dict[str, Any]]
             "mac_locations": {},
         }
 
-    pollable = [item for item in infrastructure if _known(item.get("ip_address"))]
+    targets = settings.get("targets") or set()
+    pollable = [
+        item
+        for item in infrastructure
+        if _known(item.get("ip_address"))
+        and item.get("snmp_enabled", True) is not False
+        and (not targets or str(item.get("id")) in targets)
+    ]
     semaphore = asyncio.Semaphore(settings["max_parallel_hosts"])
 
     async def guarded(item: dict[str, Any]) -> tuple[str, dict[str, Any] | Exception]:

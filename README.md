@@ -2,7 +2,7 @@
 
 Read-only local production-network dashboard for the ABOUTUS show network.
 
-## Current v0.7 scope
+## Current v0.8 scope
 
 - FastAPI backend with a static browser dashboard.
 - Editable network configuration in `config/network.yaml`.
@@ -19,10 +19,13 @@ Read-only local production-network dashboard for the ABOUTUS show network.
 - Devices grouped by VLAN with search, VLAN/status/source/type filters, explicit expand icons, and grouped detail views.
 - Device details for identity, network, location, services, history, and manual notes.
 - Compact Overview topology plus full Topology view for Internet, router, switches, VLAN lanes, infrastructure details, proven port locations, and unmapped devices.
+- Switches tab with clickable front-panel style port views for FOH and Stage switches.
+- Manual switch-port layouts, roles, expected VLANs, PVID/native VLANs, and notes in `config/network.yaml`.
 - SQLite-backed device history, first-seen/last-seen continuity, and recent status-change events.
 - Overview operator panels for problem devices, recent events, and quick device filters.
 - Open-web-interface actions for infrastructure and devices with IP addresses.
 - Optional read-only SNMP polling for infrastructure uptime, interface state, speed, traffic counters, error counters, and MAC forwarding observations.
+- VLAN-aware Q-BRIDGE-MIB polling for FOH MAC-to-port learning.
 - Switch/port details display `Unknown` unless explicitly present in inventory or proven by trusted SNMP edge-port mapping.
 
 No router or switch configuration is changed. No packet capture or deep traffic inspection is included.
@@ -150,16 +153,18 @@ To remove the boot service:
 - `GET /api/status` returns the complete dashboard snapshot.
 - `GET /api/devices` returns all known/discovered devices and VLAN groups.
 - `GET /api/topology` returns the visual topology payload.
+- `GET /api/switches` returns switch faceplate and port detail data.
 - `GET /api/history` returns recent device events and persisted snapshot totals.
 - `GET /api/docs` shows the FastAPI-generated OpenAPI docs.
 
 ## UI
 
-The v0.7 frontend is a lightweight static app with no external CDN dependencies. It keeps all data from the backend available, but uses progressive disclosure:
+The v0.8 frontend is a lightweight static app with no external CDN dependencies. It keeps all data from the backend available, but uses progressive disclosure:
 
 - Overview shows show-ready state, critical cards, problem devices, recent events, DNS checks, compact network path, and compact VLAN cards.
 - Devices provides search, filters, grouped VLAN sections, and expandable device details with identity, network, location, services, history, and notes.
 - Topology shows the main Internet/router/switch path, infrastructure SNMP details, known port locations, unmapped devices, and VLAN lanes.
+- Switches shows clickable physical switch faceplates with per-port roles, VLAN indicators, link state, speed, counters, errors, learned MACs by VLAN, and direct-vs-trunk learning.
 - Settings stores dashboard preferences in browser `localStorage`.
 
 The UI uses fixed grid tracks, wrapping controls, and compact action buttons so labels, status pills, and web-interface buttons do not overlap on desktop or tablet-sized screens.
@@ -170,7 +175,7 @@ The browser refresh button and automatic dashboard refresh call `/api/status?ref
 
 ## History Database
 
-v0.7 writes a local SQLite database to `data/monitor.sqlite3`. It stores:
+v0.8 writes a local SQLite database to `data/monitor.sqlite3`. It stores:
 
 - recent dashboard snapshot totals;
 - per-device first seen, last seen, last checked, previous status, last status change, and offline-since fields;
@@ -239,7 +244,7 @@ The helper also reads `/home/aboutus/aboutus-network-monitor/.env` when it exist
 
 ## Optional SNMP
 
-v0.7 can enrich infrastructure and device information with read-only SNMP. It uses local system tools only:
+v0.8 can enrich infrastructure and device information with read-only SNMP. It uses local system tools only:
 
 ```bash
 sudo apt install snmp
@@ -262,7 +267,7 @@ After changing `.env`, restart the service:
 ./aboutus-monitor restart
 ```
 
-The collector reads common system, interface, counter, error, bridge/FDB, and optional PoE OIDs. It does not write SNMP values and does not change switch or router configuration.
+The collector reads common system, interface, counter, error, bridge/FDB, Q-BRIDGE, and optional PoE OIDs. It does not write SNMP values and does not change switch or router configuration.
 
 MAC forwarding tables are not always exact device locations because switches also learn MACs on uplinks. For that reason, SNMP MAC observations are only promoted to a connected switch/port when the config marks the matching switch port as a trusted edge port:
 
@@ -280,9 +285,63 @@ snmp:
 
 Without trusted edge-port config, the dashboard still shows SNMP uptime and port/counter data, but device switch/port remains `Unknown`.
 
+The FOH Allied Telesis AT-GS950/48 uses Q-BRIDGE-MIB for VLAN-aware MAC learning:
+
+```text
+1.3.6.1.2.1.17.7.1.2.2.1.2
+```
+
+The index is interpreted as `VLAN ID + MAC bytes`. Trunk/downstream ports such as FOH port `47` and `41` are shown as learned-through ports, not direct device locations.
+
+The Switches tab also decodes Q-BRIDGE VLAN metadata:
+
+```text
+1.3.6.1.2.1.17.7.1.4.3.1.1  VLAN names
+1.3.6.1.2.1.17.7.1.4.3.1.2  VLAN egress/member port bitmap
+1.3.6.1.2.1.17.7.1.4.3.1.4  VLAN untagged port bitmap
+1.3.6.1.2.1.17.7.1.4.5.1.1  Port PVID/native VLAN
+```
+
+Port bitmaps are decoded into physical port numbers. Device names are matched from known MAC addresses, local ARP neighbor data, and the Pi's own interface MAC where available; unresolved MACs remain visible as MAC addresses with unknown device/IP.
+
+## Switch Layouts
+
+Switch faceplates are configured under `switches` in `config/network.yaml`. Each switch can define:
+
+- port count and grid layout;
+- per-port label and role;
+- access/trunk/downstream/management type;
+- expected VLANs;
+- PVID/native VLAN;
+- uplink/trunk flag;
+- notes.
+
+The current layout includes:
+
+- FOH port `47`: LANCOM router trunk.
+- FOH port `41`: stage/downstream trunk.
+- FOH port `48`: ABOUTUS Monitor Pi MGMT access.
+- Stage port `15`: FOH uplink, manual fallback.
+- Stage port `16`: MGMT access, manual fallback.
+
+## VLAN Colors
+
+The UI color coding is configurable in `config/network.yaml` under `ui.vlan_colors` and `ui.port_role_colors`. These colors are used by VLAN cards, topology VLAN nodes, device VLAN groups, and switch port faceplates.
+
+Current VLAN palette:
+
+- VLAN `10` CONTROL: blue
+- VLAN `20` AUDIO: green
+- VLAN `30` LASER: red
+- VLAN `40` LIGHTING: purple
+- VLAN `50` VIDEO: orange
+- VLAN `99` MGMT: light/white
+
+Stage and router trunk colors are configured separately under `ui.port_role_colors`.
+
 ## Discovery
 
-v0.7 can run a read-only `nmap -sn` ping sweep across all configured VLAN subnets. The collector:
+v0.8 can run a read-only `nmap -sn` ping sweep across all configured VLAN subnets. The collector:
 
 - uses no port scanning;
 - scans only subnets listed in `config/network.yaml`;
