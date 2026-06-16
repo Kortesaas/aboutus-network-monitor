@@ -42,6 +42,7 @@ const elements = {
   lastUpdated: document.querySelector("#lastUpdated"),
   refreshButton: document.querySelector("#refreshButton"),
   settingsButton: document.querySelector("#settingsButton"),
+  portTooltip: null,
 };
 
 const state = {
@@ -1499,7 +1500,7 @@ function portButton(switchItem, port, options = {}) {
     attrs: {
       type: "button",
       "data-switch-port": key,
-      title: portTooltip(switchItem, port),
+      "data-port-tooltip": portTooltip(switchItem, port),
       style: portStyle(port),
     },
   }, [
@@ -1614,7 +1615,19 @@ function portDetailPanel(selected) {
         el("span", { className: "summary-label", text: switchItem.name }),
         el("h3", { text: `Port ${port.number}` }),
       ]),
-      statusPill(port.link_state === "up" ? "online" : port.link_state === "down" ? "offline" : "unknown"),
+      el("div", { className: "port-detail-actions" }, [
+        statusPill(port.link_state === "up" ? "online" : port.link_state === "down" ? "offline" : "unknown"),
+        el("button", {
+          className: "icon-button compact-icon-button",
+          attrs: {
+            type: "button",
+            "data-close-switch-port": switchItem.id,
+            "aria-label": "Collapse port details",
+          },
+        }, [
+          el("span", { html: icon("chevron") }),
+        ]),
+      ]),
     ]),
     el("div", { className: "port-detail-groups" }, [
       detailGroup("Port", "switch", [
@@ -1824,19 +1837,22 @@ function render() {
   }
 }
 
-function captureDeviceScroll() {
-  if (state.route !== "devices") {
+function captureStableScroll() {
+  if (!["devices", "switches"].includes(state.route)) {
     return null;
   }
   return { left: window.scrollX, top: window.scrollY };
 }
 
-function restoreDeviceScroll(position) {
-  if (!position || state.route !== "devices") {
+function restoreStableScroll(position) {
+  if (!position) {
     return;
   }
   window.requestAnimationFrame(() => {
     window.scrollTo(position.left, position.top);
+    window.requestAnimationFrame(() => {
+      window.scrollTo(position.left, position.top);
+    });
   });
 }
 
@@ -1845,7 +1861,7 @@ async function loadStatus(options = {}) {
     return;
   }
 
-  const scrollPosition = options.preserveScroll === false ? null : captureDeviceScroll();
+  const scrollPosition = options.preserveScroll === false ? null : captureStableScroll();
   if (state.refreshTimer) {
     window.clearTimeout(state.refreshTimer);
     state.refreshTimer = null;
@@ -1874,8 +1890,60 @@ async function loadStatus(options = {}) {
     state.loading = false;
     elements.refreshButton.disabled = false;
     render();
-    restoreDeviceScroll(scrollPosition);
+    restoreStableScroll(scrollPosition);
     scheduleNextRefresh();
+  }
+}
+
+function renderPreservingScroll() {
+  const position = captureStableScroll();
+  render();
+  restoreStableScroll(position);
+}
+
+function ensurePortTooltip() {
+  if (!elements.portTooltip) {
+    elements.portTooltip = el("div", { className: "port-hover-tooltip", attrs: { role: "tooltip" } });
+    document.body.appendChild(elements.portTooltip);
+  }
+  return elements.portTooltip;
+}
+
+function positionPortTooltip(event) {
+  if (!elements.portTooltip || !elements.portTooltip.classList.contains("visible")) {
+    return;
+  }
+  const offset = 12;
+  const rect = elements.portTooltip.getBoundingClientRect();
+  let left = event.clientX + offset;
+  let top = event.clientY + offset;
+  if (left + rect.width > window.innerWidth - 8) {
+    left = event.clientX - rect.width - offset;
+  }
+  if (top + rect.height > window.innerHeight - 8) {
+    top = event.clientY - rect.height - offset;
+  }
+  elements.portTooltip.style.left = `${Math.max(8, left)}px`;
+  elements.portTooltip.style.top = `${Math.max(8, top)}px`;
+}
+
+function showPortTooltip(target, event) {
+  const value = target.dataset.portTooltip;
+  if (!value) {
+    return;
+  }
+  const tooltip = ensurePortTooltip();
+  tooltip.replaceChildren(...value.split("\n").map((line, index) => {
+    const tag = index === 0 ? "strong" : "span";
+    return el(tag, { text: line });
+  }));
+  tooltip.classList.add("visible");
+  positionPortTooltip(event);
+}
+
+function hidePortTooltip() {
+  if (elements.portTooltip) {
+    elements.portTooltip.classList.remove("visible");
   }
 }
 
@@ -1978,11 +2046,24 @@ function bindEvents() {
       return;
     }
 
+    const closeSwitchPort = event.target.closest("[data-close-switch-port]");
+    if (closeSwitchPort) {
+      delete state.selectedPorts[String(closeSwitchPort.dataset.closeSwitchPort)];
+      hidePortTooltip();
+      renderPreservingScroll();
+      return;
+    }
+
     const switchPort = event.target.closest("[data-switch-port]");
     if (switchPort) {
       const [switchId] = switchPort.dataset.switchPort.split(":");
-      state.selectedPorts[String(switchId)] = switchPort.dataset.switchPort;
-      render();
+      if (state.selectedPorts[String(switchId)] === switchPort.dataset.switchPort) {
+        delete state.selectedPorts[String(switchId)];
+      } else {
+        state.selectedPorts[String(switchId)] = switchPort.dataset.switchPort;
+      }
+      hidePortTooltip();
+      renderPreservingScroll();
       return;
     }
 
@@ -2027,6 +2108,26 @@ function bindEvents() {
     state.route = routeFromHash();
     localStorage.setItem(ROUTE_KEY, state.route);
     render();
+  });
+
+  elements.pageContent.addEventListener("mouseover", (event) => {
+    const switchPort = event.target.closest("[data-port-tooltip]");
+    if (switchPort) {
+      showPortTooltip(switchPort, event);
+    }
+  });
+
+  elements.pageContent.addEventListener("mousemove", (event) => {
+    if (event.target.closest("[data-port-tooltip]")) {
+      positionPortTooltip(event);
+    }
+  });
+
+  elements.pageContent.addEventListener("mouseout", (event) => {
+    const switchPort = event.target.closest("[data-port-tooltip]");
+    if (switchPort && !switchPort.contains(event.relatedTarget)) {
+      hidePortTooltip();
+    }
   });
 
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {

@@ -20,6 +20,18 @@
   --radius: 8px;
   --gap: 18px;
   --pad: 18px;
+  --switch-panel-top: #161d25;
+  --switch-panel-bottom: #0f141a;
+  --switch-bay: #070a0d;
+  --switch-port-bg: #14191f;
+  --switch-port-shell-top: #7a858f;
+  --switch-port-shell-mid: #3d454d;
+  --switch-port-shell-bottom: #6b747d;
+  --switch-port-shell-border: #66707a;
+  --switch-port-cavity: #050607;
+  --switch-port-notch: #a6adb4;
+  --switch-port-pin: #c7a65a;
+  --switch-led-off: #1b2426;
 }
 
 :root[data-theme="light"] {
@@ -41,6 +53,18 @@
   --offline: #c43a3a;
   --unknown: #68737d;
   --shadow: 0 18px 44px rgba(21, 36, 50, 0.1);
+  --switch-panel-top: #ffffff;
+  --switch-panel-bottom: #eef3f7;
+  --switch-bay: #d9e1e8;
+  --switch-port-bg: #e9eef3;
+  --switch-port-shell-top: #f6f8fa;
+  --switch-port-shell-mid: #c4ccd4;
+  --switch-port-shell-bottom: #dbe1e7;
+  --switch-port-shell-border: #9aa7b2;
+  --switch-port-cavity: #171c21;
+  --switch-port-notch: #f7fafc;
+  --switch-port-pin: #b98a24;
+  --switch-led-off: #aeb8c2;
 }
 
 :root[data-compact="true"] {
@@ -1696,7 +1720,7 @@ select {
   padding: 14px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-  background: #080a0d;
+  background: var(--switch-bay);
   overflow-x: auto;
 }
 
@@ -1710,15 +1734,15 @@ select {
 .allied-panel {
   position: relative;
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr) 86px;
-  gap: 10px;
+  grid-template-columns: 108px minmax(0, 1fr) 96px;
+  gap: 12px;
   width: 100%;
-  max-width: 1120px;
+  max-width: none;
   min-width: 0;
   padding: 14px 10px 12px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-  background: linear-gradient(180deg, #161d25, #0f141a);
+  background: linear-gradient(180deg, var(--switch-panel-top), var(--switch-panel-bottom));
   color: var(--text);
   overflow: hidden;
 }
@@ -1780,24 +1804,24 @@ select {
 .allied-copper-area {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
   align-self: center;
   z-index: 1;
 }
 
 .allied-port-block {
   display: grid;
-  gap: 5px;
-  padding: 5px;
+  gap: 6px;
+  padding: 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: color-mix(in srgb, var(--surface-2) 70%, #05070a);
+  background: color-mix(in srgb, var(--switch-bay) 72%, var(--surface-2));
 }
 
 .allied-port-row {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 4px;
+  gap: 5px;
 }
 
 .allied-port-row.top .switch-port {
@@ -1830,7 +1854,7 @@ select {
   padding: 5px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: color-mix(in srgb, var(--surface-2) 70%, #05070a);
+  background: color-mix(in srgb, var(--switch-bay) 72%, var(--surface-2));
 }
 
 .sfp-label {
@@ -1843,20 +1867,20 @@ select {
 
 .sfp-grid {
   display: grid;
-  grid-template-columns: repeat(2, 28px);
+  grid-template-columns: repeat(2, minmax(30px, 1fr));
   gap: 6px;
 }
 
 .allied-panel .switch-port {
   min-width: 0;
-  min-height: 31px;
+  min-height: clamp(36px, 2.6vw, 48px);
   gap: 2px;
-  padding: 1px;
-  border-color: color-mix(in srgb, var(--port-color) 32%, #4a535d);
+  padding: 2px;
+  border-color: color-mix(in srgb, var(--port-color) 32%, var(--switch-port-shell-border));
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 36%),
     linear-gradient(90deg, color-mix(in srgb, var(--port-color) 28%, transparent), transparent 18% 82%, color-mix(in srgb, var(--port-color) 28%, transparent)),
-    #14191f;
+    var(--switch-port-bg);
   color: var(--muted);
   overflow: visible;
 }
@@ -1864,12 +1888,12 @@ select {
 .allied-panel .switch-port:hover,
 .allied-panel .switch-port.selected {
   transform: translateY(-1px);
-  border-color: color-mix(in srgb, var(--port-color) 66%, #ccd4dc);
+  border-color: color-mix(in srgb, var(--port-color) 66%, var(--switch-port-shell-border));
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.32);
 }
 
 .allied-panel .switch-port.media-sfp {
-  min-height: 36px;
+  min-height: clamp(40px, 2.9vw, 54px);
   border-width: 2px;
 }
 
@@ -1898,38 +1922,38 @@ select {
 }
 
 .allied-panel .port-jack {
-  width: 20px;
-  height: 18px;
+  width: clamp(24px, 2vw, 34px);
+  height: clamp(20px, 1.55vw, 28px);
 }
 
 .allied-panel .jack-cavity {
-  inset: 4px 3px 3px;
+  inset: 5px 4px 4px;
 }
 
 .allied-panel .jack-notch {
-  width: 8px;
-  height: 2px;
+  width: 10px;
+  height: 3px;
 }
 
 .allied-panel .jack-pins {
-  left: 5px;
-  right: 5px;
-  bottom: 3px;
-  height: 2px;
+  left: 7px;
+  right: 7px;
+  bottom: 4px;
+  height: 3px;
 }
 
 .allied-panel .port-led {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
   bottom: 2px;
 }
 
 .allied-panel .link-led {
-  left: 3px;
+  left: 2px;
 }
 
 .allied-panel .activity-led {
-  right: 3px;
+  right: 2px;
 }
 
 .tplink-faceplate {
@@ -1938,13 +1962,13 @@ select {
 
 .tplink-panel {
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
+  grid-template-columns: 108px minmax(0, 1fr);
   gap: 12px;
-  width: min(100%, 760px);
-  padding: 14px 12px;
+  width: min(100%, 620px);
+  padding: 14px 10px 12px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-  background: linear-gradient(180deg, #161d25, #0f141a);
+  background: linear-gradient(180deg, var(--switch-panel-top), var(--switch-panel-bottom));
   overflow: hidden;
 }
 
@@ -1990,22 +2014,22 @@ select {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-self: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .tplink-port-block {
   display: grid;
-  gap: 8px;
-  padding: 8px;
+  gap: 6px;
+  padding: 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: color-mix(in srgb, var(--surface-2) 70%, #05070a);
+  background: color-mix(in srgb, var(--switch-bay) 72%, var(--surface-2));
 }
 
 .tplink-port-row {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  gap: 5px;
 }
 
 .tplink-port-row.top .switch-port {
@@ -2030,29 +2054,73 @@ select {
 }
 
 .tplink-panel .switch-port {
-  min-height: 42px;
+  min-height: clamp(36px, 2.6vw, 48px);
+  gap: 2px;
   padding: 2px;
+  border-color: color-mix(in srgb, var(--port-color) 32%, var(--switch-port-shell-border));
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 36%),
+    linear-gradient(90deg, color-mix(in srgb, var(--port-color) 28%, transparent), transparent 18% 82%, color-mix(in srgb, var(--port-color) 28%, transparent)),
+    var(--switch-port-bg);
+  color: var(--muted);
   overflow: visible;
+}
+
+.tplink-panel .switch-port:hover,
+.tplink-panel .switch-port.selected {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--port-color) 66%, var(--switch-port-shell-border));
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.32);
 }
 
 .tplink-panel .port-number {
   position: absolute;
-  top: -14px;
+  top: -13px;
   left: 50%;
   color: var(--muted);
-  font-size: 0.5rem;
+  font-size: 0.48rem;
   line-height: 1;
   transform: translateX(-50%);
 }
 
 .tplink-port-row.bottom .port-number {
   top: auto;
-  bottom: -14px;
+  bottom: -13px;
 }
 
 .tplink-panel .port-jack {
-  width: 34px;
-  height: 27px;
+  width: clamp(24px, 2vw, 34px);
+  height: clamp(20px, 1.55vw, 28px);
+}
+
+.tplink-panel .jack-cavity {
+  inset: 5px 4px 4px;
+}
+
+.tplink-panel .jack-notch {
+  width: 10px;
+  height: 3px;
+}
+
+.tplink-panel .jack-pins {
+  left: 7px;
+  right: 7px;
+  bottom: 4px;
+  height: 3px;
+}
+
+.tplink-panel .port-led {
+  width: 4px;
+  height: 4px;
+  bottom: 2px;
+}
+
+.tplink-panel .link-led {
+  left: 2px;
+}
+
+.tplink-panel .activity-led {
+  right: 2px;
 }
 
 .switch-port {
@@ -2068,7 +2136,7 @@ select {
   border-radius: 5px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.07), transparent 38%),
-    #12171d;
+    var(--switch-port-bg);
   color: var(--muted);
   overflow: hidden;
   transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease;
@@ -2104,7 +2172,7 @@ select {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 38%),
     radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--port-color) 18%, transparent), transparent 68%),
-    #12171d;
+    var(--switch-port-bg);
 }
 
 .port-number {
@@ -2117,10 +2185,10 @@ select {
   display: block;
   width: 38px;
   height: 30px;
-  border: 1px solid #66707a;
+  border: 1px solid var(--switch-port-shell-border);
   border-radius: 4px 4px 3px 3px;
   background:
-    linear-gradient(180deg, #7a858f 0 18%, #3d454d 18% 24%, #6b747d 24% 100%);
+    linear-gradient(180deg, var(--switch-port-shell-top) 0 18%, var(--switch-port-shell-mid) 18% 24%, var(--switch-port-shell-bottom) 24% 100%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.2),
     inset 0 -2px 0 rgba(0, 0, 0, 0.3),
@@ -2133,7 +2201,7 @@ select {
   border-radius: 2px;
   background:
     radial-gradient(circle at 50% 50%, rgba(80, 92, 102, 0.28), transparent 34%),
-    #050607;
+    var(--switch-port-cavity);
   clip-path: polygon(0 20%, 24% 20%, 31% 0, 69% 0, 76% 20%, 100% 20%, 100% 100%, 0 100%);
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.9);
 }
@@ -2146,7 +2214,7 @@ select {
   width: 13px;
   height: 4px;
   border-radius: 0 0 2px 2px;
-  background: #a6adb4;
+  background: var(--switch-port-notch);
   transform: translateX(-50%);
 }
 
@@ -2158,7 +2226,7 @@ select {
   z-index: 1;
   height: 4px;
   border-radius: 1px;
-  background: repeating-linear-gradient(90deg, #c7a65a 0 2px, transparent 2px 4px);
+  background: repeating-linear-gradient(90deg, var(--switch-port-pin) 0 2px, transparent 2px 4px);
   opacity: 0.85;
 }
 
@@ -2166,20 +2234,20 @@ select {
   position: absolute;
   z-index: 2;
   bottom: 3px;
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   border: 1px solid rgba(255, 255, 255, 0.16);
-  background: #1b2426;
+  background: var(--switch-led-off);
   box-shadow: inset 0 0 3px rgba(0, 0, 0, 0.8);
 }
 
 .link-led {
-  left: 4px;
+  left: 3px;
 }
 
 .activity-led {
-  right: 4px;
+  right: 3px;
 }
 
 .switch-port.link-up .link-led {
@@ -2259,8 +2327,62 @@ select {
   gap: 12px;
 }
 
+.port-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.compact-icon-button {
+  width: 32px;
+  min-height: 32px;
+}
+
+.compact-icon-button svg {
+  transform: rotate(180deg);
+}
+
 .port-detail-head h3 {
   margin: 0;
+}
+
+.port-hover-tooltip {
+  position: fixed;
+  z-index: 80;
+  display: grid;
+  gap: 4px;
+  max-width: min(280px, calc(100vw - 18px));
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 36%, var(--border));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface) 94%, var(--switch-panel-bottom));
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.38);
+  color: var(--text);
+  font-size: 0.78rem;
+  line-height: 1.25;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(2px);
+  transition: opacity 0.08s ease, transform 0.08s ease;
+}
+
+.port-hover-tooltip.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.port-hover-tooltip strong,
+.port-hover-tooltip span {
+  display: block;
+  min-width: 0;
+}
+
+.port-hover-tooltip strong {
+  font-size: 0.8rem;
+}
+
+.port-hover-tooltip span {
+  color: var(--muted);
 }
 
 .port-detail-groups {
