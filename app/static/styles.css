@@ -1899,7 +1899,7 @@ select {
 
 .allied-panel .port-number {
   position: absolute;
-  top: -13px;
+  top: -17px;
   left: 50%;
   color: var(--muted);
   font-size: 0.48rem;
@@ -1909,16 +1909,16 @@ select {
 
 .allied-port-row.bottom .port-number {
   top: auto;
-  bottom: -13px;
+  bottom: -20px;
 }
 
 .sfp-grid .port-number {
-  top: -13px;
+  top: -17px;
 }
 
 .sfp-grid .switch-port:nth-child(n + 3) .port-number {
   top: auto;
-  bottom: -13px;
+  bottom: -20px;
 }
 
 .allied-panel .port-jack {
@@ -2075,7 +2075,7 @@ select {
 
 .tplink-panel .port-number {
   position: absolute;
-  top: -13px;
+  top: -17px;
   left: 50%;
   color: var(--muted);
   font-size: 0.48rem;
@@ -2085,7 +2085,7 @@ select {
 
 .tplink-port-row.bottom .port-number {
   top: auto;
-  bottom: -13px;
+  bottom: -20px;
 }
 
 .tplink-panel .port-jack {
