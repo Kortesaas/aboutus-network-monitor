@@ -2,7 +2,7 @@
 
 Read-only local production-network dashboard for the ABOUTUS show network.
 
-## Current v0.6 scope
+## Current v0.7 scope
 
 - FastAPI backend with a static browser dashboard.
 - Editable network configuration in `config/network.yaml`.
@@ -16,12 +16,14 @@ Read-only local production-network dashboard for the ABOUTUS show network.
   - Internet probes
   - VLAN gateways
 - Manual inventory loaded from config and merged with safe subnet discovery.
-- Devices grouped by VLAN with search, VLAN/status/source/type filters, explicit expand icons, and expandable details.
-- Compact Overview topology plus full Topology view for Internet, router, switches, VLAN lanes, and warning state.
+- Devices grouped by VLAN with search, VLAN/status/source/type filters, explicit expand icons, and grouped detail views.
+- Device details for identity, network, location, services, history, and manual notes.
+- Compact Overview topology plus full Topology view for Internet, router, switches, VLAN lanes, infrastructure details, proven port locations, and unmapped devices.
 - SQLite-backed device history, first-seen/last-seen continuity, and recent status-change events.
 - Overview operator panels for problem devices, recent events, and quick device filters.
 - Open-web-interface actions for infrastructure and devices with IP addresses.
-- Switch/port details display `Unknown` unless explicitly present in inventory or proven by a future collector.
+- Optional read-only SNMP polling for infrastructure uptime, interface state, speed, traffic counters, error counters, and MAC forwarding observations.
+- Switch/port details display `Unknown` unless explicitly present in inventory or proven by trusted SNMP edge-port mapping.
 
 No router or switch configuration is changed. No packet capture or deep traffic inspection is included.
 
@@ -34,6 +36,7 @@ app/
   config.py          YAML config loader
   discovery.py       Safe nmap ping-sweep discovery collector
   main.py            FastAPI app and routes
+  snmp.py            Optional read-only SNMP collector
   storage.py         SQLite persistence for snapshots, device state, and events
   status_service.py  Builds the dashboard status payload
   static/            Browser UI assets
@@ -152,11 +155,11 @@ To remove the boot service:
 
 ## UI
 
-The v0.6 frontend is a lightweight static app with no external CDN dependencies. It keeps all data from the backend available, but uses progressive disclosure:
+The v0.7 frontend is a lightweight static app with no external CDN dependencies. It keeps all data from the backend available, but uses progressive disclosure:
 
 - Overview shows show-ready state, critical cards, problem devices, recent events, DNS checks, compact network path, and compact VLAN cards.
-- Devices provides search, filters, grouped VLAN sections, and expandable device details with visible chevron affordances and persisted history fields.
-- Topology shows the main Internet/router/switch path plus VLAN lanes.
+- Devices provides search, filters, grouped VLAN sections, and expandable device details with identity, network, location, services, history, and notes.
+- Topology shows the main Internet/router/switch path, infrastructure SNMP details, known port locations, unmapped devices, and VLAN lanes.
 - Settings stores dashboard preferences in browser `localStorage`.
 
 The UI uses fixed grid tracks, wrapping controls, and compact action buttons so labels, status pills, and web-interface buttons do not overlap on desktop or tablet-sized screens.
@@ -167,7 +170,7 @@ The browser refresh button and automatic dashboard refresh call `/api/status?ref
 
 ## History Database
 
-v0.6 writes a local SQLite database to `data/monitor.sqlite3`. It stores:
+v0.7 writes a local SQLite database to `data/monitor.sqlite3`. It stores:
 
 - recent dashboard snapshot totals;
 - per-device first seen, last seen, last checked, previous status, last status change, and offline-since fields;
@@ -232,9 +235,54 @@ The config path can be overridden with:
 export ABOUTUS_MONITOR_CONFIG=/path/to/network.yaml
 ```
 
+The helper also reads `/home/aboutus/aboutus-network-monitor/.env` when it exists. Use `.env.example` as the template and keep real secrets out of git.
+
+## Optional SNMP
+
+v0.7 can enrich infrastructure and device information with read-only SNMP. It uses local system tools only:
+
+```bash
+sudo apt install snmp
+```
+
+SNMP is enabled in `config/network.yaml`, but devices only return data when they allow read-only SNMP from the Pi and the local `.env` contains the correct community. Do not commit real SNMP communities to git.
+
+Useful environment variables for `.env`:
+
+```dotenv
+ABOUTUS_SNMP_COMMUNITY=your-readonly-community
+ABOUTUS_SNMP_VERSION=2c
+ABOUTUS_SNMP_TIMEOUT_SECONDS=2
+ABOUTUS_SNMP_RETRIES=0
+```
+
+After changing `.env`, restart the service:
+
+```bash
+./aboutus-monitor restart
+```
+
+The collector reads common system, interface, counter, error, bridge/FDB, and optional PoE OIDs. It does not write SNMP values and does not change switch or router configuration.
+
+MAC forwarding tables are not always exact device locations because switches also learn MACs on uplinks. For that reason, SNMP MAC observations are only promoted to a connected switch/port when the config marks the matching switch port as a trusted edge port:
+
+```yaml
+snmp:
+  enabled: true
+  trusted_edge_ports:
+    stage-switch:
+      - "1"
+      - "2"
+  uplink_ports:
+    stage-switch:
+      - "16"
+```
+
+Without trusted edge-port config, the dashboard still shows SNMP uptime and port/counter data, but device switch/port remains `Unknown`.
+
 ## Discovery
 
-v0.6 can run a read-only `nmap -sn` ping sweep across all configured VLAN subnets. The collector:
+v0.7 can run a read-only `nmap -sn` ping sweep across all configured VLAN subnets. The collector:
 
 - uses no port scanning;
 - scans only subnets listed in `config/network.yaml`;
@@ -255,7 +303,9 @@ sudo apt install nmap
 
 ## Next milestones
 
-1. Add SNMP polling for real switch uptime, port state, speed, counters, errors, and bridge/MAC forwarding tables.
-2. Correlate IP to MAC using router ARP/DHCP/SNMP where possible.
-3. Correlate discovered MAC addresses with forwarding tables to show exact switch/port when proven.
+1. Add router ARP/DHCP lease correlation so clients that block ping can still be seen.
+2. Add vendor/OUI lookup from a local bundled OUI database for MAC addresses not identified by nmap.
+3. Add editable device notes and role/type overrides from the UI, persisted back to inventory.
+4. Add per-device availability percentages and a short status timeline.
+5. Add per-port historical counter deltas so busy/erroring switch ports stand out during a show.
 4. Add alert acknowledgement/mute controls for expected maintenance windows.

@@ -4,6 +4,19 @@ set -euo pipefail
 APP_NAME="ABOUTUS Network Monitor"
 SERVICE_NAME="aboutus-network-monitor.service"
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="${ABOUTUS_MONITOR_ENV:-$PROJECT_DIR/.env}"
+
+load_env_file() {
+  if [[ -f "$ENV_FILE" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$ENV_FILE"
+    set +a
+  fi
+}
+
+load_env_file
+
 VENV_DIR="${ABOUTUS_MONITOR_VENV:-$PROJECT_DIR/.venv}"
 HOST="${ABOUTUS_MONITOR_HOST:-0.0.0.0}"
 PORT="${ABOUTUS_MONITOR_PORT:-8080}"
@@ -36,6 +49,8 @@ Environment overrides:
   ABOUTUS_MONITOR_CONFIG=$CONFIG_FILE
   ABOUTUS_MONITOR_VENV=$VENV_DIR
   ABOUTUS_MONITOR_DB=$PROJECT_DIR/data/monitor.sqlite3
+  ABOUTUS_MONITOR_ENV=$ENV_FILE
+  ABOUTUS_SNMP_COMMUNITY=
 EOF
 }
 
@@ -213,6 +228,7 @@ WorkingDirectory=$PROJECT_DIR
 Environment=ABOUTUS_MONITOR_HOST=$HOST
 Environment=ABOUTUS_MONITOR_PORT=$PORT
 Environment=ABOUTUS_MONITOR_CONFIG=$CONFIG_FILE
+EnvironmentFile=-$ENV_FILE
 ExecStart=$PROJECT_DIR/aboutus-monitor serve
 Restart=on-failure
 RestartSec=5

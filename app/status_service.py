@@ -8,6 +8,7 @@ from typing import Any
 from .checks import OFFLINE, ONLINE, UNKNOWN, run_check, utc_now
 from .config import load_config
 from .discovery import discover_devices, discovery_cache_ttl
+from .snmp import poll_snmp
 from .storage import history_payload, persist_snapshot
 
 
@@ -83,6 +84,15 @@ def _web_url(entry: dict[str, Any], ip_address: Any) -> tuple[str | None, str]:
         return generated, "generated"
 
     return None, UNKNOWN_LABEL
+
+
+def _is_known(value: Any) -> bool:
+    prepared = str(value or "").strip()
+    return bool(prepared) and prepared.lower() not in {"unknown", "none", "null", "n/a"}
+
+
+def _display_value(value: Any) -> str:
+    return str(value) if _is_known(value) else UNKNOWN_LABEL
 
 
 def _normalize_infrastructure_entry(entry: dict[str, Any], fallback_id: str | None = None) -> dict[str, Any]:
@@ -253,7 +263,18 @@ async def _manual_device_status(
         "web_url_source": web_url_source,
         "mac_address": _known(entry.get("mac_address") or entry.get("mac")),
         "hostname": _known(entry.get("hostname")),
+        "dns_name": _known(entry.get("dns_name")),
         "vendor": _known(entry.get("vendor")),
+        "configured_name": _known(_normalize_name(entry)),
+        "manual_inventory": {
+            "source": _known(entry.get("source_key") or "manual_inventory"),
+            "configured_name": _known(_normalize_name(entry)),
+            "role": _known(entry.get("role")),
+            "owner": _known(entry.get("owner")),
+            "criticality": _known(entry.get("criticality")),
+            "notes": _known(entry.get("notes")),
+            "asset_tag": _known(entry.get("asset_tag")),
+        },
         "status": check["status"],
         "last_seen": check["checked_at"] if check["status"] == ONLINE else _known(entry.get("last_seen")),
         "discovery_sources": _unique_sources(sources),
@@ -330,7 +351,18 @@ def _normalize_discovered_device(
         "web_url_source": web_url_source,
         "mac_address": _known(entry.get("mac_address") or entry.get("mac")),
         "hostname": _known(entry.get("hostname")),
+        "dns_name": _known(entry.get("dns_name")),
         "vendor": _known(entry.get("vendor")),
+        "configured_name": _known(entry.get("configured_name")),
+        "manual_inventory": {
+            "source": UNKNOWN_LABEL,
+            "configured_name": UNKNOWN_LABEL,
+            "role": UNKNOWN_LABEL,
+            "owner": UNKNOWN_LABEL,
+            "criticality": UNKNOWN_LABEL,
+            "notes": UNKNOWN_LABEL,
+            "asset_tag": UNKNOWN_LABEL,
+        },
         "status": entry.get("status") or ONLINE,
         "last_seen": _known(entry.get("last_seen")),
         "discovery_sources": _unique_sources([str(source) for source in entry.get("discovery_sources", ["nmap"])]),
@@ -460,6 +492,152 @@ def _apply_infrastructure_status(
     return updated
 
 
+def _apply_snmp_to_infrastructure(
+    infrastructure: list[dict[str, Any]],
+    snmp: dict[str, Any],
+) -> list[dict[str, Any]]:
+    devices = snmp.get("devices") or {}
+    updated: list[dict[str, Any]] = []
+    for item in infrastructure:
+        prepared = dict(item)
+        snmp_info = devices.get(str(item.get("id"))) or {}
+        if snmp_info:
+            prepared["snmp"] = snmp_info
+            if _is_known(snmp_info.get("uptime")):
+                prepared["uptime"] = snmp_info["uptime"]
+            if _is_known(snmp_info.get("sys_name")):
+                prepared["system_name"] = snmp_info["sys_name"]
+            if _is_known(snmp_info.get("sys_descr")):
+                prepared["system_description"] = snmp_info["sys_descr"]
+        else:
+            prepared["snmp"] = {"status": snmp.get("status", UNKNOWN_LABEL)}
+        updated.append(prepared)
+    return updated
+
+
+def _apply_snmp_locations(devices: list[dict[str, Any]], snmp: dict[str, Any]) -> list[dict[str, Any]]:
+    locations = snmp.get("mac_locations") or {}
+    updated: list[dict[str, Any]] = []
+    for device in devices:
+        prepared = dict(device)
+        mac = str(prepared.get("mac_address") or "").strip().lower().replace("-", ":")
+        location = locations.get(mac)
+        if location and _is_known(mac):
+            prepared["connected_switch"] = _known(location.get("switch_name"))
+            prepared["connected_port"] = _known(location.get("port"))
+            prepared["switch_port_confidence"] = _known(location.get("confidence"))
+            prepared["connection"] = {
+                "switch_name": _known(location.get("switch_name")),
+                "switch_port": _known(location.get("port")),
+                "port_state": _known(location.get("port_state")),
+                "source": "snmp_fdb",
+            }
+            prepared["discovery_sources"] = _unique_sources([*prepared.get("discovery_sources", []), "snmp_fdb"])
+        updated.append(prepared)
+    return updated
+
+
+def _vlan_label(device: dict[str, Any]) -> str:
+    if _is_known(device.get("vlan_name")) and _is_known(device.get("vlan_id")):
+        return f"{device['vlan_name']} / VLAN {device['vlan_id']}"
+    if _is_known(device.get("vlan_name")):
+        return str(device["vlan_name"])
+    if _is_known(device.get("vlan_id")):
+        return f"VLAN {device['vlan_id']}"
+    return UNKNOWN_LABEL
+
+
+def _latency_text(check: dict[str, Any]) -> str:
+    latency = check.get("latency_ms")
+    return f"{latency} ms" if latency is not None else UNKNOWN_LABEL
+
+
+def _identity_confidence(device: dict[str, Any]) -> str:
+    if _is_known(device.get("mac_address")):
+        return "MAC address"
+    if _is_known(device.get("configured_name")) or bool(device.get("expected")):
+        return "Manual inventory"
+    if _is_known(device.get("hostname")):
+        return "Hostname"
+    if _is_known(device.get("ip_address")):
+        return "IP only"
+    return UNKNOWN_LABEL
+
+
+def _location_confidence(device: dict[str, Any]) -> str:
+    confidence = device.get("switch_port_confidence")
+    if _is_known(confidence):
+        return str(confidence)
+    if _is_known(device.get("connected_switch")) and _is_known(device.get("connected_port")):
+        return "manual_inventory"
+    return UNKNOWN_LABEL
+
+
+def _decorate_device(device: dict[str, Any]) -> dict[str, Any]:
+    prepared = device
+    check = prepared.get("check") or {}
+    history = prepared.get("history") or {}
+    connection = prepared.get("connection") or {}
+    manual = prepared.get("manual_inventory") or {}
+    sources = prepared.get("discovery_sources") or []
+    web_url = prepared.get("web_url")
+
+    prepared["details"] = {
+        "identity": {
+            "display_name": _display_value(prepared.get("display_name") or prepared.get("name")),
+            "configured_name": _display_value(prepared.get("configured_name") or manual.get("configured_name")),
+            "role": _display_value(prepared.get("role")),
+            "expected": "Yes" if prepared.get("expected") else "No",
+            "mac_address": _display_value(prepared.get("mac_address")),
+            "hostname": _display_value(prepared.get("hostname")),
+            "dns_name": _display_value(prepared.get("dns_name") or prepared.get("hostname")),
+            "vendor": _display_value(prepared.get("vendor")),
+            "confidence": _identity_confidence(prepared),
+        },
+        "network": {
+            "ip_address": _display_value(prepared.get("ip_address")),
+            "vlan": _vlan_label(prepared),
+            "subnet": _display_value(prepared.get("subnet")),
+            "status": _display_value(prepared.get("status")),
+            "check_source": _display_value(check.get("source")),
+            "latency": _latency_text(check),
+            "last_check": _display_value(check.get("checked_at")),
+            "discovery_sources": ", ".join(str(source) for source in sources) if sources else UNKNOWN_LABEL,
+        },
+        "location": {
+            "switch": _display_value(prepared.get("connected_switch") or connection.get("switch_name")),
+            "port": _display_value(prepared.get("connected_port") or connection.get("switch_port")),
+            "port_state": _display_value(connection.get("port_state")),
+            "confidence": _location_confidence(prepared),
+        },
+        "services": {
+            "web_interface": _display_value(web_url),
+            "web_url_source": _display_value(prepared.get("web_url_source")),
+            "status_check": _display_value(check.get("type") or check.get("source")),
+        },
+        "history": {
+            "first_seen": _display_value(history.get("first_seen")),
+            "last_seen": _display_value(history.get("last_seen") or prepared.get("last_seen")),
+            "last_checked": _display_value(history.get("last_checked")),
+            "last_status_change": _display_value(history.get("last_status_change")),
+            "previous_status": _display_value(history.get("previous_status")),
+            "offline_since": _display_value(history.get("offline_since")),
+        },
+        "notes": {
+            "owner": _display_value(manual.get("owner")),
+            "criticality": _display_value(manual.get("criticality")),
+            "asset_tag": _display_value(manual.get("asset_tag")),
+            "notes": _display_value(manual.get("notes")),
+            "source": _display_value(manual.get("source")),
+        },
+    }
+    return prepared
+
+
+def _decorate_devices(devices: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [_decorate_device(device) for device in devices]
+
+
 async def _internet_status(config: dict[str, Any], defaults: dict[str, Any]) -> dict[str, Any]:
     probes = config.get("internet", {}).get("probes") or []
     if not probes:
@@ -524,6 +702,7 @@ def _build_topology(
     internet: dict[str, Any],
     vlan_groups: list[dict[str, Any]],
     warnings: list[dict[str, str]],
+    devices: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     nodes: list[dict[str, Any]] = [
         {
@@ -568,7 +747,39 @@ def _build_topology(
         parent = infra_ids[-1]
         links.extend({"source": parent, "target": f"vlan-{group['id']}", "label": "VLAN"} for group in vlan_groups)
 
-    return {"nodes": nodes, "links": links, "warnings": warnings}
+    devices = devices or []
+    mapped_devices = [
+        device
+        for device in devices
+        if _is_known(device.get("connected_switch")) and _is_known(device.get("connected_port"))
+    ]
+    unmapped_devices = [
+        device
+        for device in devices
+        if not (_is_known(device.get("connected_switch")) and _is_known(device.get("connected_port")))
+    ]
+
+    ports: dict[str, dict[str, Any]] = {}
+    for device in mapped_devices:
+        key = f"{device.get('connected_switch')}::{device.get('connected_port')}"
+        ports.setdefault(
+            key,
+            {
+                "switch": device.get("connected_switch"),
+                "port": device.get("connected_port"),
+                "port_state": (device.get("connection") or {}).get("port_state", UNKNOWN_LABEL),
+                "devices": [],
+            },
+        )["devices"].append(device)
+
+    return {
+        "nodes": nodes,
+        "links": links,
+        "warnings": warnings,
+        "ports": list(ports.values()),
+        "mapped_devices": mapped_devices,
+        "unmapped_devices": unmapped_devices,
+    }
 
 
 def _persist_snapshot_safely(snapshot: dict[str, Any]) -> dict[str, Any]:
@@ -602,9 +813,12 @@ async def _build_snapshot_uncached() -> dict[str, Any]:
     )
     devices = await _devices_status(config, defaults, discovery)
     devices = _apply_infrastructure_status(devices, infrastructure)
+    snmp = await poll_snmp(config, infrastructure)
+    infrastructure = _apply_snmp_to_infrastructure(infrastructure, snmp)
+    devices = _apply_snmp_locations(devices, snmp)
     devices_by_vlan = _group_devices_by_vlan(config.get("vlans", []), devices)
     warnings = _build_warnings(infrastructure, internet, vlans, devices, discovery)
-    topology = _build_topology(infrastructure, internet, devices_by_vlan, warnings)
+    topology = _build_topology(infrastructure, internet, devices_by_vlan, warnings, devices)
 
     return {
         "generated_at": utc_now(),
@@ -620,6 +834,12 @@ async def _build_snapshot_uncached() -> dict[str, Any]:
             if key != "devices"
         },
         "topology": topology,
+        "snmp": {
+            "enabled": snmp.get("enabled", False),
+            "status": snmp.get("status", UNKNOWN_LABEL),
+            "errors": snmp.get("errors", []),
+            "mac_observation_count": snmp.get("mac_observation_count", 0),
+        },
         "warnings": warnings,
     }
 
@@ -640,6 +860,7 @@ async def build_snapshot(force_refresh: bool = False) -> dict[str, Any]:
         ttl = discovery_cache_ttl(config)
         snapshot = await _build_snapshot_uncached()
         snapshot = _persist_snapshot_safely(snapshot)
+        snapshot["devices"] = _decorate_devices(snapshot.get("devices") or [])
         _SNAPSHOT_CACHE = snapshot
         _SNAPSHOT_EXPIRES_AT = time.monotonic() + ttl
         return snapshot

@@ -1303,9 +1303,37 @@ select {
 
 .device-details {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
   padding: 0 12px 14px 58px;
+}
+
+.detail-group {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.detail-group h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 0.86rem;
+}
+
+.detail-group h4 svg {
+  width: 16px;
+  height: 16px;
+  fill: var(--accent);
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px 12px;
 }
 
 .detail-item {
@@ -1334,6 +1362,7 @@ select {
   display: grid;
   grid-template-columns: minmax(320px, 430px) minmax(0, 1fr);
   gap: var(--gap);
+  align-items: start;
 }
 
 .topology-path {
@@ -1380,6 +1409,151 @@ select {
 .vlan-lane {
   grid-template-columns: 40px minmax(0, 1fr) auto;
   align-items: center;
+}
+
+.topology-panels {
+  display: grid;
+  gap: var(--gap);
+}
+
+.infra-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.infra-detail-card {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.infra-detail-head {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.infra-detail-head strong,
+.infra-detail-head span {
+  display: block;
+  min-width: 0;
+}
+
+.infra-detail-head span {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.infra-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px 12px;
+}
+
+.port-table {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.port-table-head,
+.port-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) 100px 94px 64px;
+  gap: 10px;
+  align-items: center;
+  min-width: 420px;
+  padding: 7px 8px;
+  border-radius: calc(var(--radius) - 2px);
+}
+
+.port-table-head {
+  color: var(--subtle);
+  font-size: 0.7rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.port-row {
+  background: var(--surface);
+}
+
+.port-row > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.port-location-grid,
+.unmapped-device-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.port-location-card {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.port-location-head {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 12px;
+  align-items: center;
+  gap: 8px;
+}
+
+.port-location-head svg {
+  width: 18px;
+  height: 18px;
+  fill: var(--accent);
+}
+
+.port-device-list {
+  display: grid;
+  gap: 6px;
+}
+
+.mini-device-row {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 9px 10px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.mini-device-row strong,
+.mini-device-row span span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mini-device-row span span {
+  color: var(--muted);
+  font-size: 0.82rem;
 }
 
 .settings-grid {

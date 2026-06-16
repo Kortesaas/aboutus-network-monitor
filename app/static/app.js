@@ -1,4 +1,4 @@
-const APP_VERSION = "0.6.0";
+const APP_VERSION = "0.7.0";
 const SETTINGS_KEY = "aboutus-network-monitor-ui-settings-v3";
 const COLLAPSE_KEY = "aboutus-network-monitor-collapsed-vlans-v3";
 const OPEN_DEVICES_KEY = "aboutus-network-monitor-open-devices-v4";
@@ -83,6 +83,8 @@ function icon(name) {
     video: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v12H3V5Zm2 2v8h14V7H5Zm4 12h6v2H9v-2Z"/></svg>',
     shield: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5l-8-3Zm0 2.2 6 2.3V11c0 3.9-2.4 7.4-6 8.8A9.8 9.8 0 0 1 6 11V6.5l6-2.3Z"/></svg>',
     search: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 4a6.5 6.5 0 1 0 4.1 11.5l4 4 1.4-1.4-4-4A6.5 6.5 0 0 0 10.5 4Zm0 2a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Z"/></svg>',
+    mapPin: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 2a5 5 0 0 1 5 5c0 2.8-3 7.3-5 9.8C10 16.3 7 11.8 7 9a5 5 0 0 1 5-5Zm0 3a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z"/></svg>',
+    chip: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h8v3h3v12h-3v3H8v-3H5V6h3V3Zm2 2v3H7v8h3v3h4v-3h3V8h-3V5h-4Zm0 5h4v4h-4v-4ZM2 8h2v2H2V8Zm0 6h2v2H2v-2Zm18-6h2v2h-2V8Zm0 6h2v2h-2v-2Z"/></svg>',
     chevron: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 9 4 4 4-4 1.4 1.4L12 15.8l-5.4-5.4L8 9Z"/></svg>',
   };
   return icons[name] || icons.dashboard;
@@ -981,6 +983,7 @@ function deviceKey(device) {
 function deviceRow(device) {
   const key = deviceKey(device);
   const detailId = `device-${key.replaceAll(".", "-").replaceAll(":", "-").replaceAll(" ", "-")}`;
+  const details = device.details || {};
   const row = el("details", {
     className: "device-row",
     attrs: { id: detailId, "data-device-key": key },
@@ -993,7 +996,7 @@ function deviceRow(device) {
     statusDot(device.status),
     el("div", { className: "device-primary" }, [
       el("strong", { text: device.display_name || device.name || device.ip_address }),
-      el("span", { text: text(device.ip_address) }),
+      el("span", { text: compactDeviceSubtitle(device) }),
     ]),
     el("span", { className: "device-vlan", text: `${text(device.vlan_name)} / ${text(device.vlan_id)}` }),
     badge(device.role || firstSource(device), device.expected ? "expected" : "neutral"),
@@ -1002,29 +1005,84 @@ function deviceRow(device) {
     openWebAction(device),
   ]));
   row.append(el("div", { className: "device-details" }, [
-    detailItem("MAC", device.mac_address),
-    detailItem("Hostname", device.hostname),
-    detailItem("Last seen", formatTime(device.last_seen)),
-    detailItem("First seen", formatTime(device.history?.first_seen)),
-    detailItem("Status change", formatTime(device.history?.last_status_change)),
-    detailItem("Offline since", formatTime(device.history?.offline_since)),
-    detailItem("Previous status", device.history?.previous_status),
-    detailItem("Discovery", (device.discovery_sources || ["Unknown"]).join(", ")),
-    detailItem("Connected switch", device.connected_switch),
-    detailItem("Switch port", device.connected_port),
-    detailItem("Confidence", device.switch_port_confidence),
+    detailGroup("Identity", "chip", [
+      detailItem("Configured", details.identity?.configured_name),
+      detailItem("MAC", details.identity?.mac_address ?? device.mac_address),
+      detailItem("Hostname", details.identity?.hostname ?? device.hostname),
+      detailItem("DNS", details.identity?.dns_name),
+      detailItem("Vendor", details.identity?.vendor ?? device.vendor),
+      detailItem("Confidence", details.identity?.confidence),
+    ]),
+    detailGroup("Network", "network", [
+      detailItem("IP", details.network?.ip_address ?? device.ip_address),
+      detailItem("VLAN", details.network?.vlan ?? `${text(device.vlan_name)} / ${text(device.vlan_id)}`),
+      detailItem("Subnet", details.network?.subnet ?? device.subnet),
+      detailItem("Discovery", details.network?.discovery_sources ?? (device.discovery_sources || ["Unknown"]).join(", ")),
+      detailItem("Latency", details.network?.latency),
+      detailItem("Last check", formatDetailTime(details.network?.last_check)),
+    ]),
+    detailGroup("Location", "mapPin", [
+      detailItem("Switch", details.location?.switch ?? device.connected_switch),
+      detailItem("Port", details.location?.port ?? device.connected_port),
+      detailItem("Port state", details.location?.port_state),
+      detailItem("Confidence", details.location?.confidence ?? device.switch_port_confidence),
+    ]),
+    detailGroup("Services", "external", [
+      detailItem("Web", details.services?.web_interface ?? device.web_url, webUrlFor(device)),
+      detailItem("Source", details.services?.web_url_source ?? device.web_url_source),
+      detailItem("Status check", details.services?.status_check),
+    ]),
+    detailGroup("History", "history", [
+      detailItem("First seen", formatDetailTime(details.history?.first_seen ?? device.history?.first_seen)),
+      detailItem("Last seen", formatDetailTime(details.history?.last_seen ?? device.last_seen)),
+      detailItem("Status change", formatDetailTime(details.history?.last_status_change ?? device.history?.last_status_change)),
+      detailItem("Offline since", formatDetailTime(details.history?.offline_since ?? device.history?.offline_since)),
+      detailItem("Previous", details.history?.previous_status ?? device.history?.previous_status),
+    ]),
+    detailGroup("Notes", "devices", [
+      detailItem("Owner", details.notes?.owner),
+      detailItem("Criticality", details.notes?.criticality),
+      detailItem("Asset", details.notes?.asset_tag),
+      detailItem("Notes", details.notes?.notes),
+    ]),
   ]));
   return row;
+}
+
+function compactDeviceSubtitle(device) {
+  return [
+    text(device.ip_address),
+    isUnknown(device.hostname) ? "" : text(device.hostname),
+    isUnknown(device.mac_address) ? "" : text(device.mac_address),
+  ].filter(Boolean).join(" / ");
 }
 
 function firstSource(device) {
   return (device.discovery_sources || ["Unknown"])[0];
 }
 
-function detailItem(label, value) {
+function formatDetailTime(value) {
+  return isUnknown(value) ? "Unknown" : formatTime(value);
+}
+
+function detailGroup(title, iconName, items) {
+  return el("section", { className: "detail-group" }, [
+    el("h4", {}, [
+      el("span", { html: icon(iconName), attrs: { "aria-hidden": "true" } }),
+      el("span", { text: title }),
+    ]),
+    el("div", { className: "detail-grid" }, items),
+  ]);
+}
+
+function detailItem(label, value, href = null) {
+  const display = text(value);
+  const valueNode = href && !isUnknown(display)
+    ? el("a", { className: "value", text: display, attrs: { href, target: "_blank", rel: "noopener noreferrer" } })
+    : unknownLabel(display);
   return el("div", { className: "detail-item" }, [
     el("span", { text: label }),
-    unknownLabel(value),
+    valueNode,
   ]);
 }
 
@@ -1044,7 +1102,17 @@ function renderTopologyPage(data) {
     el("div", { className: "vlan-lane-grid" }, (data.devices_by_vlan || []).map((group) => vlanLane(group, data))),
   ]);
 
-  elements.pageContent.append(el("div", { className: "topology-layout" }, [path, lanes]));
+  elements.pageContent.append(
+    el("div", { className: "topology-layout" }, [
+      path,
+      el("div", { className: "topology-panels" }, [
+        infrastructurePanel(data),
+        switchPortMappingPanel(data),
+        unmappedDevicesPanel(data),
+        lanes,
+      ]),
+    ]),
+  );
 }
 
 function topologyNode(node) {
@@ -1052,10 +1120,118 @@ function topologyNode(node) {
     el("span", { className: "topology-icon", html: icon(node.icon) }),
     el("div", { className: "topology-card-main" }, [
       el("strong", { text: node.label }),
-      el("span", { text: `${node.role} / ${text(node.ip)}` }),
+      el("span", { text: `${node.role} / ${text(node.ip)}${node.item?.uptime ? ` / ${node.item.uptime}` : ""}` }),
     ]),
     node.item ? openWebAction(node.item) : el("span"),
     statusPill(node.status),
+  ]);
+}
+
+function infrastructurePanel(data) {
+  return el("section", { className: "panel" }, [
+    sectionTitle("Infrastructure"),
+    el("div", { className: "infra-detail-grid" }, (data.infrastructure || []).map(infrastructureDetailCard)),
+  ]);
+}
+
+function infrastructureDetailCard(item) {
+  const snmp = item.snmp || {};
+  const ports = snmp.ports || [];
+  const visiblePorts = ports.slice(0, 12);
+  return el("article", { className: "infra-detail-card" }, [
+    el("div", { className: "infra-detail-head" }, [
+      el("span", { className: "topology-icon", html: icon(isRouter(item) ? "router" : "switch") }),
+      el("div", {}, [
+        el("strong", { text: item.name }),
+        el("span", { text: `${text(item.ip_address)} / ${text(item.model)}` }),
+      ]),
+      statusPill(item.status),
+    ]),
+    el("div", { className: "infra-facts" }, [
+      detailItem("Uptime", item.uptime),
+      detailItem("SNMP name", item.system_name),
+      detailItem("Description", item.system_description),
+      detailItem("Ports", snmp.port_count !== undefined ? `${snmp.ports_up || 0}/${snmp.port_count} up` : "Unknown"),
+    ]),
+    visiblePorts.length > 0
+      ? el("div", { className: "port-table" }, [
+        el("div", { className: "port-table-head" }, [
+          el("span", { text: "Port" }),
+          el("span", { text: "State" }),
+          el("span", { text: "Speed" }),
+          el("span", { text: "Errors" }),
+        ]),
+        ...visiblePorts.map(portRow),
+      ])
+      : el("div", { className: "compact-empty", text: "No SNMP port data" }),
+  ]);
+}
+
+function portRow(port) {
+  const errors = Number(port.in_errors || 0) + Number(port.out_errors || 0);
+  const speed = port.speed_mbps ? `${port.speed_mbps} Mbps` : "Unknown";
+  return el("div", { className: "port-row" }, [
+    el("span", { text: text(port.name) }),
+    el("span", {}, [statusDot(port.oper_status === "up" ? "online" : port.oper_status === "down" ? "offline" : "unknown"), el("span", { text: text(port.oper_status) })]),
+    el("span", { text: speed }),
+    el("span", { text: errors ? String(errors) : "0" }),
+  ]);
+}
+
+function switchPortMappingPanel(data) {
+  const ports = data.topology?.ports || [];
+  return el("section", { className: "panel" }, [
+    sectionTitle("Known Port Locations"),
+    ports.length
+      ? el("div", { className: "port-location-grid" }, ports.map(portLocationCard))
+      : el("div", { className: "compact-empty", text: "No proven switch-port locations yet" }),
+  ]);
+}
+
+function portLocationCard(port) {
+  return el("article", { className: "port-location-card" }, [
+    el("div", { className: "port-location-head" }, [
+      el("span", { html: icon("switch") }),
+      el("strong", { text: `${text(port.switch)} / ${text(port.port)}` }),
+      statusDot(port.port_state === "up" ? "online" : "unknown"),
+    ]),
+    el("div", { className: "port-device-list" }, (port.devices || []).map((device) => el("button", {
+      className: "mini-device-row",
+      attrs: {
+        type: "button",
+        "data-device-focus": deviceKey(device),
+        "data-device-vlan": device.vlan_id,
+      },
+    }, [
+      statusDot(device.status),
+      el("span", {}, [
+        el("strong", { text: device.display_name || device.name || device.ip_address }),
+        el("span", { text: `${text(device.ip_address)} / ${text(device.vlan_name)}` }),
+      ]),
+    ]))),
+  ]);
+}
+
+function unmappedDevicesPanel(data) {
+  const devices = data.topology?.unmapped_devices || [];
+  return el("section", { className: "panel" }, [
+    sectionTitle("Unmapped Devices"),
+    devices.length
+      ? el("div", { className: "unmapped-device-grid" }, devices.slice(0, 24).map((device) => el("button", {
+        className: "mini-device-row",
+        attrs: {
+          type: "button",
+          "data-device-focus": deviceKey(device),
+          "data-device-vlan": device.vlan_id,
+        },
+      }, [
+        statusDot(device.status),
+        el("span", {}, [
+          el("strong", { text: device.display_name || device.name || device.ip_address }),
+          el("span", { text: `${text(device.ip_address)} / ${text(device.vlan_name)}` }),
+        ]),
+      ])))
+      : el("div", { className: "compact-empty", text: "All visible devices have a known location" }),
   ]);
 }
 
@@ -1076,6 +1252,7 @@ function vlanLane(group, data) {
 
 function renderSettings(data) {
   const discovery = data.discovery || {};
+  const snmp = data.snmp || {};
   elements.pageContent.append(
     el("section", { className: "settings-grid" }, [
       settingsCard("Appearance", [
@@ -1093,7 +1270,7 @@ function renderSettings(data) {
         readonlyLine("App version", APP_VERSION),
         readonlyLine("Discovery", `${text(discovery.status)} / ${(discovery.subnets || []).length} subnets`),
         readonlyLine("History DB", data.history?.database_path),
-        readonlyLine("SNMP mapping", "Not implemented yet"),
+        readonlyLine("SNMP", `${text(snmp.status)} / ${snmp.mac_observation_count || 0} MAC observations`),
         readonlyLine("Generated", formatTime(data.generated_at)),
       ]),
     ]),

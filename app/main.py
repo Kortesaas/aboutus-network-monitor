@@ -14,7 +14,7 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 app = FastAPI(
     title="ABOUTUS Network Monitor",
-    version="0.6.0",
+    version="0.7.0",
     docs_url="/api/docs",
     redoc_url=None,
 )
@@ -64,6 +64,7 @@ async def api_status(refresh: bool = False) -> dict:
             "devices_by_vlan": [],
             "discovery": {"enabled": False, "status": "error", "errors": [str(exc)]},
             "topology": {"nodes": [], "links": [], "warnings": []},
+            "snmp": {"enabled": False, "status": "error", "errors": []},
             "error": str(exc),
         }
 

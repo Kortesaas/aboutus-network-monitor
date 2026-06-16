@@ -17,6 +17,25 @@ discovery:
   host_timeout: 5s
   max_parallel_scans: 2
 
+snmp:
+  enabled: true
+  version: "2c"
+  community_env: ABOUTUS_SNMP_COMMUNITY
+  timeout_seconds: 2
+  retries: 0
+  max_parallel_hosts: 2
+  poll_interfaces: true
+  poll_fdb: true
+  poll_poe: false
+  # Switch-port locations are only treated as exact when the port is listed here.
+  # Example:
+  # trusted_edge_ports:
+  #   stage-switch:
+  #     - "1"
+  #     - "2"
+  trusted_edge_ports: {}
+  uplink_ports: {}
+
 infrastructure:
   - id: lancom-router
     name: LANCOM 1783VAW
