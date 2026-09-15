@@ -1,406 +1,365 @@
+# ABOUTUS production network - monitor configuration
+#
+# This file is the persistent backend configuration. The Settings page edits it
+# through the API; you can also edit it by hand and restart the service.
+# SNMP communities are read-only communities. Nothing here writes to any device.
+
 station:
-  name: aboutus-network-monitor
-  ip_address: 192.168.99.10
-  vlan: MGMT
+  id: aboutus-pi
+  name: aboutus-net
+  hostname: aboutus-net
+  ip_address: 192.168.99.2
+  vlan: 99
+  role: monitor
+  model: Raspberry Pi 4 8GB
+  web_url: http://aboutus-net
+
+monitoring:
+  # Fast cycle: ping infrastructure/gateways, SNMP switch/port state, MAC tables, ARP.
+  fast_poll_interval_seconds: 12
+  # Full cycle: fast cycle + subnet host discovery (fping/nmap). Never runs more
+  # often than full_scan_min_interval_seconds, even when requested from the UI.
+  full_scan_interval_seconds: 300
+  full_scan_min_interval_seconds: 60
+  # Manual refresh cooldown shared by every browser.
+  refresh_cooldown_seconds: 5
+  # Static SNMP tables (VLAN membership, PVIDs, QoS, STP) are refreshed every
+  # N fast cycles and on every full cycle.
+  static_tables_every_cycles: 5
+  # Device presence thresholds (seconds since last confirmation).
+  stale_after_seconds: 45
+  relocating_seconds: 40
+  offline_after_seconds: 240
+  # Targeted refresh after a switch port changes state: re-poll that switch and
+  # sweep the affected VLAN subnet, but not more often than this.
+  targeted_refresh_cooldown_seconds: 15
+  # Port error/discard growth per fast cycle that raises a problem.
+  port_error_threshold: 1
 
 check_defaults:
-  timeout_seconds: 1.5
+  timeout_seconds: 1.0
   ping_count: 1
 
 discovery:
   enabled: true
-  tool: nmap
-  scan_interval_seconds: 60
-  timeout_seconds_per_subnet: 15
-  resolve_dns: false
-  max_retries: 1
+  # fping is much faster than nmap for a /24 ping sweep and needs no root. nmap
+  # is used automatically when fping is not installed.
+  tool: fping
+  timeout_seconds_per_subnet: 20
   host_timeout: 5s
   max_parallel_scans: 2
 
-ui:
-  vlan_colors:
-    "10":
-      color: "#0d8df2"
-      dark: "#07579f"
-      text: "#ffffff"
-    "20":
-      color: "#00c822"
-      dark: "#00750d"
-      text: "#ffffff"
-    "30":
-      color: "#df1726"
-      dark: "#9b101a"
-      text: "#ffffff"
-    "40":
-      color: "#a52ab6"
-      dark: "#681675"
-      text: "#ffffff"
-    "50":
-      color: "#ef790d"
-      dark: "#844500"
-      text: "#ffffff"
-    "99":
-      color: "#f4f5f7"
-      dark: "#cfd4da"
-      text: "#101820"
-  port_role_colors:
-    stage:
-      color: "#f3d21b"
-      dark: "#b79700"
-      text: "#090909"
-    router:
-      color: "#050505"
-      dark: "#000000"
-      text: "#f3d21b"
-    trunk:
-      color: "#f3d21b"
-      dark: "#b79700"
-      text: "#090909"
-    unknown:
-      color: "#27303a"
-      dark: "#151a21"
-      text: "#a8b3bf"
-
 snmp:
   enabled: true
-  version: "2c"
-  community_env: ABOUTUS_SNMP_COMMUNITY
+  version: 2c
   timeout_seconds: 2
-  retries: 0
-  max_parallel_hosts: 2
-  poll_interfaces: true
-  poll_fdb: true
-  poll_q_bridge: true
-  poll_poe: false
-  targets:
-    - foh-switch
-  # Switch-port locations are only treated as exact when the port is listed here.
-  trusted_edge_ports:
-    foh-switch:
-      - "48"
-  uplink_ports:
-    foh-switch:
-      - "41"
-      - "47"
+  retries: 1
+  max_parallel_hosts: 3
+  # Fallback community when a device does not define its own.
+  community_env: ABOUTUS_SNMP_COMMUNITY
 
-switches:
-  - id: foh-switch
-    name: FOH AT-GS950/48
-    model: Allied Telesis AT-GS950/48
-    ip_address: 192.168.99.2
-    port_count: 48
-    layout:
-      columns: 24
-      rows: 2
-    ports:
-      "41":
-        label: Stage trunk
-        role: downstream trunk
-        type: downstream
-        expected_vlans: [10, 20, 30, 40, 50, 99]
-        native_vlan: 99
-        pvid: 99
-        uplink: true
-        notes: Carries VLANs toward stage/downstream switch.
-      "47":
-        label: LANCOM router trunk
-        role: router trunk
-        type: trunk
-        expected_vlans: [10, 20, 30, 40, 50, 99]
-        native_vlan: 99
-        pvid: 99
-        uplink: true
-        notes: Core trunk to LANCOM router.
-      "48":
-        label: Monitor Pi
-        role: management access
-        type: mgmt
-        expected_vlans: [99]
-        native_vlan: 99
-        pvid: 99
-        notes: MGMT access port for ABOUTUS Network Monitor Pi.
+vlans:
+- id: 10
+  name: CONTROL
+  subnet: 192.168.10.0/24
+  gateway: 192.168.10.1
+  color: control
+  monitor: true
+- id: 20
+  name: AUDIO
+  description: Dante audio
+  subnet: 192.168.20.0/24
+  gateway: 192.168.20.1
+  color: audio
+  monitor: true
+- id: 30
+  name: LIGHT
+  subnet: 192.168.30.0/24
+  gateway: 192.168.30.1
+  color: light
+  monitor: true
+- id: 40
+  name: VIDEO
+  subnet: 192.168.40.0/24
+  gateway: 192.168.40.1
+  color: video
+  monitor: true
+- id: 99
+  name: MGMT
+  subnet: 192.168.99.0/24
+  gateway: 192.168.99.1
+  color: mgmt
+  monitor: true
+- id: 90
+  name: WAN_PASS
+  description: Isolated WAN passthrough. No IP, no DHCP, never on normal trunks.
+  subnet: null
+  gateway: null
+  color: wan
+  monitor: false
+  isolated: true
 
-  - id: stage-switch
-    name: Stage TL-SG1016PE
-    model: TP-Link TL-SG1016PE
-    ip_address: 192.168.99.3
-    port_count: 16
-    layout:
-      columns: 8
-      rows: 2
-    snmp_enabled: false
-    ports:
-      "1":
-        label: CTRL
-        role: CONTROL access
-        type: access
-        expected_vlans: [10]
-        native_vlan: 10
-        pvid: 10
-        notes: Manual fallback stage port assignment.
-      "2":
-        label: CTRL
-        role: CONTROL access
-        type: access
-        expected_vlans: [10]
-        native_vlan: 10
-        pvid: 10
-        notes: Manual fallback stage port assignment.
-      "3":
-        label: AUDIO
-        role: AUDIO access
-        type: access
-        expected_vlans: [20]
-        native_vlan: 20
-        pvid: 20
-        notes: Manual fallback stage port assignment.
-      "4":
-        label: AUDIO
-        role: AUDIO access
-        type: access
-        expected_vlans: [20]
-        native_vlan: 20
-        pvid: 20
-        notes: Manual fallback stage port assignment.
-      "5":
-        label: AUDIO
-        role: AUDIO access
-        type: access
-        expected_vlans: [20]
-        native_vlan: 20
-        pvid: 20
-        notes: Manual fallback stage port assignment.
-      "6":
-        label: AUDIO
-        role: AUDIO access
-        type: access
-        expected_vlans: [20]
-        native_vlan: 20
-        pvid: 20
-        notes: Manual fallback stage port assignment.
-      "7":
-        label: LASER
-        role: LASER access
-        type: access
-        expected_vlans: [30]
-        native_vlan: 30
-        pvid: 30
-        notes: Manual fallback stage port assignment.
-      "8":
-        label: LASER
-        role: LASER access
-        type: access
-        expected_vlans: [30]
-        native_vlan: 30
-        pvid: 30
-        notes: Manual fallback stage port assignment.
-      "9":
-        label: LIGHTING
-        role: LIGHTING access
-        type: access
-        expected_vlans: [40]
-        native_vlan: 40
-        pvid: 40
-        notes: Manual fallback stage port assignment.
-      "10":
-        label: LIGHTING
-        role: LIGHTING access
-        type: access
-        expected_vlans: [40]
-        native_vlan: 40
-        pvid: 40
-        notes: Manual fallback stage port assignment.
-      "11":
-        label: LIGHTING
-        role: LIGHTING access
-        type: access
-        expected_vlans: [40]
-        native_vlan: 40
-        pvid: 40
-        notes: Manual fallback stage port assignment.
-      "12":
-        label: LIGHTING
-        role: LIGHTING access
-        type: access
-        expected_vlans: [40]
-        native_vlan: 40
-        pvid: 40
-        notes: Manual fallback stage port assignment.
-      "13":
-        label: VIDEO
-        role: VIDEO access
-        type: access
-        expected_vlans: [50]
-        native_vlan: 50
-        pvid: 50
-        notes: Manual fallback stage port assignment.
-      "14":
-        label: VIDEO
-        role: VIDEO access
-        type: access
-        expected_vlans: [50]
-        native_vlan: 50
-        pvid: 50
-        notes: Manual fallback stage port assignment.
-      "15":
-        label: FOH uplink
-        role: FOH uplink
-        type: trunk
-        expected_vlans: [10, 20, 30, 40, 50, 99]
-        native_vlan: 99
-        pvid: 99
-        uplink: true
-        notes: Manual fallback until TP-Link SNMP support is confirmed.
-      "16":
-        label: MGMT access
-        role: management access
-        type: mgmt
-        expected_vlans: [99]
-        native_vlan: 99
-        pvid: 99
-        notes: Manual fallback port role.
+# Production policy used by problem detection.
+policy:
+  trunk_vlans: [10, 20, 30, 40, 99]
+  forbidden_vlans: [50]
+  forbidden_trunk_vlans: [50, 90]
+  deprecated_names: [LASER, LIGHTING]
+  ap_trunk:
+    native_vlan: 99
+    tagged_vlans: [10, 20, 30, 40]
+  rstp_root_switch: dell-foh
+  dante_switches: [dell-foh, dell-stage-a, dell-stage-b]
+  dante_vlan: 20
+
+# Reusable port profiles. A switch port references a profile by name.
+port_profiles:
+  CONTROL:  {type: access, vlan: 10, color: control, label: CONTROL}
+  AUDIO:    {type: access, vlan: 20, color: audio, label: AUDIO}
+  LIGHT:    {type: access, vlan: 30, color: light, label: LIGHT}
+  VIDEO:    {type: access, vlan: 40, color: video, label: VIDEO}
+  MGMT:     {type: access, vlan: 99, color: mgmt, label: MGMT}
+  TRUNK:    {type: trunk, tagged: [10, 20, 30, 40, 99], native: null, color: trunk, label: TRUNK}
+  AP_TRUNK: {type: ap_trunk, tagged: [10, 20, 30, 40], native: 99, color: ap, label: AP}
+  WAN_PASS: {type: wan_pass, vlan: 90, color: wan, label: WAN}
+  UNUSED:   {type: unused, color: unused, label: ''}
+
+# Expected access layout for Dell / TP-Link 28-port switches (ports 1-20).
+default_access_layout:
+  "1-8": CONTROL
+  "9-12": AUDIO
+  "13-16": LIGHT
+  "17-20": VIDEO
 
 infrastructure:
-  - id: lancom-router
+  router:
+    id: lancom-router
     name: LANCOM 1783VAW
-    role: Router
-    model: LANCOM 1783VAW
+    vendor: LANCOM
+    model: 1783VAW
     ip_address: 192.168.99.1
     web_url: http://192.168.99.1
-    vlan: MGMT
-    snmp_enabled: false
-    check:
-      type: ping
-
-  - id: foh-switch
-    name: FOH AT-GS950/48
-    role: FOH core switch
-    model: Allied Telesis AT-GS950/48
-    ip_address: 192.168.99.2
-    web_url: http://192.168.99.2
-    vlan: MGMT
+    vlan: 99
+    location: FOH
     snmp_enabled: true
-    check:
-      type: ping
+    snmp:
+      version: 2c
+      community_env: ABOUTUS_SNMP_COMMUNITY_LANCOM_ROUTER
+    # LANCOM LAN-1 is the trunk to the FOH Dell.
+    uplink_port: LAN-1
+  access_points:
+  - id: eap-foh
+    name: ABOUTUS-AP-FOH
+    vendor: tp-link
+    model: EAP650
+    ip_address: 192.168.99.30
+    web_url: http://192.168.99.30
+    vlan: 99
+    management_vlan: 99
+    location: FOH
+    expected_switch_id: dell-foh
+    expected_switch_port: 22
+    expected_sys_name: ABOUTUS-AP-FOH
+    expected_sys_location: FOH
+    snmp_enabled: true
+    snmp:
+      version: 2c
+      community_env: ABOUTUS_SNMP_COMMUNITY_EAP650
+  - id: eap-stage-a
+    name: ABOUTUS-AP-STAGE-A
+    vendor: tp-link
+    model: EAP650
+    ip_address: 192.168.99.31
+    web_url: http://192.168.99.31
+    vlan: 99
+    management_vlan: 99
+    location: STAGE A
+    expected_switch_id: dell-stage-a
+    expected_switch_port: 22
+    expected_sys_name: ABOUTUS-AP-STAGE-A
+    expected_sys_location: STAGE A
+    snmp_enabled: true
+    snmp:
+      version: 2c
+      community_env: ABOUTUS_SNMP_COMMUNITY_EAP650
 
-  - id: stage-switch
-    name: Stage TL-SG1016PE
-    role: Stage switch
-    model: TP-Link TL-SG1016PE
-    ip_address: 192.168.99.3
-    web_url: http://192.168.99.3
-    vlan: MGMT
-    snmp_enabled: false
-    check:
-      type: ping
+switches:
+- id: dell-foh
+  enabled: true
+  name: Dell FOH
+  hostname: ABOUTUS-FOH-DELL-N1524
+  role: core
+  vendor: Dell
+  model: N1524
+  location: FOH
+  ip_address: 192.168.99.10
+  web_url: http://192.168.99.10
+  vlan: 99
+  port_count: 28
+  layout: {columns: 14, rows: 2}
+  sfp_ports: [25, 26, 27, 28]
+  rstp_root_expected: true
+  dante_capable: true
+  snmp_enabled: true
+  snmp: {version: 2c, community_env: ABOUTUS_SNMP_COMMUNITY_DELL}
+  ports:
+    "1-8": CONTROL
+    "9-12": AUDIO
+    "13-16": LIGHT
+    "17-20": VIDEO
+    "21": {profile: MGMT, label: PI, notes: Raspberry Pi monitor}
+    "22": {profile: AP_TRUNK, label: AP-FOH, neighbor: eap-foh, notes: Native 99 + tagged Wi-Fi client VLANs}
+    "23": {profile: TRUNK, label: ROUTER, neighbor: lancom-router, notes: Trunk to LANCOM LAN-1}
+    "24": {profile: MGMT, label: MGMT, notes: MGMT service / expansion switch mgmt}
+    "25": {profile: TRUNK, label: SFP-1}
+    "26": {profile: TRUNK, label: SFP-2}
+    "27": {profile: TRUNK, label: SFP-3, neighbor: dell-stage-b}
+    "28": {profile: TRUNK, label: SFP-4, neighbor: dell-stage-a}
+
+- id: dell-stage-a
+  enabled: true
+  name: Dell Stage A
+  hostname: ABOUTUS-STAGE-A-DELL-N1524
+  role: stage
+  vendor: Dell
+  model: N1524
+  location: Stage A
+  ip_address: 192.168.99.11
+  web_url: http://192.168.99.11
+  vlan: 99
+  port_count: 28
+  layout: {columns: 14, rows: 2}
+  sfp_ports: [25, 26, 27, 28]
+  dante_capable: true
+  snmp_enabled: true
+  snmp: {version: 2c, community_env: ABOUTUS_SNMP_COMMUNITY_DELL}
+  ports:
+    "1-8": CONTROL
+    "9-12": AUDIO
+    "13-16": LIGHT
+    "17-20": VIDEO
+    "21": {profile: TRUNK, label: TRUNK-1, notes: Copper trunk}
+    "22": {profile: AP_TRUNK, label: AP-STAGE-A, neighbor: eap-stage-a, notes: Native 99 + tagged Wi-Fi client VLANs}
+    "23": {profile: TRUNK, label: TRUNK-3, notes: Copper trunk}
+    "24": {profile: MGMT, label: MGMT}
+    "25": {profile: TRUNK, label: SFP-1}
+    "26": {profile: TRUNK, label: SFP-2}
+    "27": {profile: TRUNK, label: SFP-3}
+    "28": {profile: TRUNK, label: SFP-4, neighbor: dell-foh, notes: Uplink to FOH}
+
+- id: dell-stage-b
+  enabled: true
+  name: Dell Stage B
+  hostname: ABOUTUS-STAGE-B-DELL-N1524
+  role: stage
+  vendor: Dell
+  model: N1524
+  location: Stage B
+  ip_address: 192.168.99.12
+  web_url: http://192.168.99.12
+  vlan: 99
+  port_count: 28
+  layout: {columns: 14, rows: 2}
+  sfp_ports: [25, 26, 27, 28]
+  dante_capable: true
+  optional: true
+  snmp_enabled: true
+  snmp: {version: 2c, community_env: ABOUTUS_SNMP_COMMUNITY_DELL}
+  ports:
+    "1-8": CONTROL
+    "9-12": AUDIO
+    "13-16": LIGHT
+    "17-20": VIDEO
+    "21": {profile: TRUNK, label: TRUNK-1}
+    "22": {profile: AP_TRUNK, label: AP/AUX}
+    "23": {profile: TRUNK, label: TRUNK-3}
+    "24": {profile: MGMT, label: MGMT}
+    "25": {profile: TRUNK, label: SFP-1}
+    "26": {profile: TRUNK, label: SFP-2}
+    "27": {profile: TRUNK, label: SFP-3}
+    "28": {profile: TRUNK, label: SFP-4, neighbor: dell-foh, notes: Uplink to FOH}
+
+- id: allied-gs950
+  enabled: true
+  name: Allied AT-GS950/48
+  hostname: ABOUTUS_ATGS950
+  role: auxiliary
+  vendor: Allied Telesis
+  model: AT-GS950/48
+  location: Stage
+  ip_address: 192.168.99.20
+  web_url: http://192.168.99.20
+  vlan: 99
+  port_count: 48
+  layout: {columns: 24, rows: 2}
+  optional: true
+  snmp_enabled: true
+  snmp: {version: 2c, community_env: ABOUTUS_SNMP_COMMUNITY_ALLIED_GS950}
+  # The GS950/48 uses its own layout; ports 43-48 are configured as native-99
+  # trunks. Assign an expected neighbour if/when this auxiliary switch is cabled.
+  ports:
+    "1-12": CONTROL
+    "13-22": AUDIO
+    "23-32": LIGHT
+    "33-42": VIDEO
+    "43-47": {profile: TRUNK, label: TRUNK}
+    "48": {profile: AP_TRUNK, label: UPLINK, notes: Optional auxiliary uplink (native 99)}
+
+- id: tplink-t1600g
+  enabled: true
+  name: TP-Link T1600G-28TS
+  hostname: ABOUTUS-TPLINK-T1600G
+  role: expansion
+  vendor: TP-Link
+  model: T1600G-28TS
+  location: Expansion
+  ip_address: 192.168.99.21
+  web_url: http://192.168.99.21
+  vlan: 99
+  port_count: 28
+  layout: {columns: 14, rows: 2}
+  sfp_ports: [25, 26, 27, 28]
+  optional: true
+  snmp_enabled: true
+  snmp: {version: 2c, community_env: ABOUTUS_SNMP_COMMUNITY_TPLINK_T1600G}
+  ports:
+    "1-8": CONTROL
+    "9-12": AUDIO
+    "13-16": LIGHT
+    "17-20": VIDEO
+    "21": {profile: TRUNK, label: TRUNK-1}
+    "22": {profile: MGMT, label: MGMT}
+    "23": {profile: TRUNK, label: UPLINK, neighbor: dell-foh, notes: Uplink to FOH}
+    "24": {profile: MGMT, label: MGMT}
+    "25": {profile: TRUNK, label: SFP-1}
+    "26": {profile: TRUNK, label: SFP-2}
+    "27": {profile: TRUNK, label: SFP-3}
+    "28": {profile: TRUNK, label: SFP-4}
 
 internet:
   probes:
-    - name: Cloudflare DNS
-      type: ping
-      target: 1.1.1.1
-    - name: Google DNS
-      type: ping
-      target: 8.8.8.8
-    - name: HTTPS probe
-      type: https
-      target: https://www.google.com/generate_204
+  - name: Cloudflare DNS
+    type: ping
+    target: 1.1.1.1
+  - name: Google DNS
+    type: ping
+    target: 8.8.8.8
+  - name: HTTPS probe
+    type: https
+    target: https://www.google.com/generate_204
 
-vlans:
-  - id: 10
-    name: CONTROL
-    subnet: 192.168.10.0/24
-    gateway: 192.168.10.1
-  - id: 20
-    name: AUDIO
-    subnet: 192.168.20.0/24
-    gateway: 192.168.20.1
-  - id: 30
-    name: LASER
-    subnet: 192.168.30.0/24
-    gateway: 192.168.30.1
-  - id: 40
-    name: LIGHTING
-    subnet: 192.168.40.0/24
-    gateway: 192.168.40.1
-  - id: 50
-    name: VIDEO
-    subnet: 192.168.50.0/24
-    gateway: 192.168.50.1
-  - id: 99
-    name: MGMT
-    subnet: 192.168.99.0/24
-    gateway: 192.168.99.1
+# Optional manual inventory of expected end devices (by MAC and/or IP).
+# Editable device names/owners/notes are stored in the SQLite database via the UI.
+inventory: []
 
-inventory:
-  - id: aboutus-pi
-    name: ABOUTUS Network Monitor Pi
-    ip: 192.168.99.10
-    vlan: MGMT
-    role: monitor
-    expected: true
-    hostname: aboutus-network-monitor
-    vendor: Raspberry Pi
-    mac_address:
-    connected_switch: Unknown
-    connected_port: Unknown
-    mac_source: Unknown
-    switch_port_confidence: Unknown
-    discovery_sources:
-      - inventory
-    status_check:
-      type: ping
-
-  - id: lancom-router
-    name: LANCOM Router
-    ip: 192.168.99.1
-    web_url: http://192.168.99.1
-    vlan: MGMT
-    role: router
-    expected: true
-    vendor: LANCOM Systems
-    mac_address:
-    connected_switch: Unknown
-    connected_port: Unknown
-    mac_source: Unknown
-    switch_port_confidence: Unknown
-    discovery_sources:
-      - inventory
-    status_check:
-      type: ping
-
-  - id: foh-switch
-    name: FOH Switch AT-GS950/48
-    ip: 192.168.99.2
-    web_url: http://192.168.99.2
-    vlan: MGMT
-    role: switch
-    expected: true
-    vendor: Allied Telesis
-    mac_address:
-    connected_switch: Unknown
-    connected_port: Unknown
-    mac_source: Unknown
-    switch_port_confidence: Unknown
-    discovery_sources:
-      - inventory
-    status_check:
-      type: ping
-
-  - id: stage-switch
-    name: Stage Switch TL-SG1016PE
-    ip: 192.168.99.3
-    web_url: http://192.168.99.3
-    vlan: MGMT
-    role: switch
-    expected: true
-    vendor: TP-Link
-    mac_address:
-    connected_switch: Unknown
-    connected_port: Unknown
-    mac_source: Unknown
-    switch_port_confidence: Unknown
-    discovery_sources:
-      - inventory
-    status_check:
-      type: ping
+ui:
+  colors:
+    control: {color: '#2f80ff', dark: '#1a4fb0', text: '#ffffff'}
+    audio:   {color: '#22c55e', dark: '#15803d', text: '#062b14'}
+    light:   {color: '#ef4444', dark: '#991b1b', text: '#ffffff'}
+    video:   {color: '#a855f7', dark: '#6b21a8', text: '#ffffff'}
+    mgmt:    {color: '#e5e7eb', dark: '#9ca3af', text: '#111827'}
+    trunk:   {color: '#111111', dark: '#000000', text: '#facc15', accent: '#facc15'}
+    ap:      {color: '#0ea5e9', dark: '#0369a1', text: '#03202e', accent: '#facc15'}
+    wan:     {color: '#f97316', dark: '#9a3412', text: '#111111', accent: '#111111'}
+    unused:  {color: '#2a3140', dark: '#1b202b', text: '#8b95a7'}

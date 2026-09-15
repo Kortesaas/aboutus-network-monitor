@@ -1,74 +1,56 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#0b0f16">
     <title>ABOUTUS Network Monitor</title>
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="/static/styles.css?v=1.0.0">
   </head>
   <body>
-    <div class="app-shell">
-      <header class="site-header">
-        <div class="brand" aria-label="ABOUTUS Network Monitor">
-          <div class="brand-mark" aria-hidden="true">
-            <span data-icon="network"></span>
-          </div>
-        </div>
-
-        <nav class="nav-list" aria-label="Primary navigation">
-          <button class="nav-item active" type="button" data-route="overview">
-            <span class="nav-icon" data-icon="dashboard"></span>
-            <span>Overview</span>
-          </button>
-          <button class="nav-item" type="button" data-route="devices">
-            <span class="nav-icon" data-icon="devices"></span>
-            <span>Devices</span>
-          </button>
-          <button class="nav-item" type="button" data-route="topology">
-            <span class="nav-icon" data-icon="topology"></span>
-            <span>Topology</span>
-          </button>
-          <button class="nav-item" type="button" data-route="switches">
-            <span class="nav-icon" data-icon="switch"></span>
-            <span>Switches</span>
-          </button>
-          <button class="nav-item" type="button" data-route="settings">
-            <span class="nav-icon" data-icon="settings"></span>
-            <span>Settings</span>
-          </button>
+    <div class="app" id="app">
+      <header class="topbar">
+        <a class="brand" href="#/overview" aria-label="ABOUTUS Network Monitor">
+          <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M4 5h16a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm0 8h16a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1zm2-6v2h2V7H6zm0 8v2h2v-2H6zm4-8v2h2V7h-2zm0 8v2h2v-2h-2z"/></svg></span>
+          <span class="brand-text"><strong>ABOUTUS</strong> Network</span>
+        </a>
+        <nav class="nav" id="nav" aria-label="Pages">
+          <a href="#/overview" data-route="overview">Overview</a>
+          <a href="#/topology" data-route="topology">Topology</a>
+          <a href="#/switches" data-route="switches">Switches</a>
+          <a href="#/access-points" data-route="access-points">Access Points</a>
+          <a href="#/devices" data-route="devices">Devices</a>
+          <a href="#/problems" data-route="problems">Problems <span class="nav-badge" id="navProblemBadge" hidden>0</span></a>
+          <a href="#/settings" data-route="settings">Settings</a>
         </nav>
-
-        <div class="header-actions">
-          <button id="settingsButton" class="icon-button" type="button" aria-label="Open settings" title="Open settings">
-            <span data-icon="settings"></span>
-          </button>
-          <button id="refreshButton" class="primary-button" type="button">
-            <span data-icon="refresh"></span>
-            <span>Refresh</span>
-          </button>
+        <div class="topbar-actions">
+          <button class="btn" id="btnRefresh" type="button" title="Fast poll of infrastructure, switches and known devices">Refresh</button>
+          <button class="btn btn-ghost" id="btnFullScan" type="button" title="Full discovery sweep of all monitored VLANs (rate limited)">Full scan</button>
         </div>
       </header>
-
-      <section class="page-heading">
-        <h2 id="pageTitle">Overview</h2>
-        <div class="status-bar" aria-label="Dashboard status">
-          <span class="status-chip">
-            <span data-icon="clock"></span>
-            <span id="systemClock">--:--:--</span>
-          </span>
-          <span class="status-chip refresh-chip">
-            <span data-icon="timer"></span>
-            <span id="refreshCountdown">--s</span>
-            <span id="refreshProgress" class="refresh-progress" aria-hidden="true"></span>
-          </span>
-          <span id="lastUpdated" class="status-chip timestamp">Not updated yet</span>
-        </div>
-      </section>
-
-      <main id="pageContent" class="content" tabindex="-1"></main>
+      <div class="statusbar" id="statusbar" aria-live="polite">
+        <span class="chip" id="chipLive" data-state="connecting"><span class="dot"></span><span id="chipLiveText">Connecting…</span></span>
+        <span class="chip" id="chipScan"><span class="spinner" id="scanSpinner" hidden></span><span id="chipScanText">Waiting for backend</span></span>
+        <span class="chip" id="chipAge"><span id="chipAgeText">No data yet</span></span>
+        <span class="chip chip-error" id="chipError" hidden><span id="chipErrorText"></span></span>
+        <span class="chip chip-clock" id="chipClock">--:--:--</span>
+      </div>
+      <main class="content" id="content" tabindex="-1"></main>
+      <nav class="tabbar" id="tabbar" aria-label="Pages">
+        <a href="#/overview" data-route="overview">Overview</a>
+        <a href="#/topology" data-route="topology">Topology</a>
+        <a href="#/switches" data-route="switches">Switches</a>
+        <a href="#/access-points" data-route="access-points">APs</a>
+        <a href="#/devices" data-route="devices">Devices</a>
+        <a href="#/problems" data-route="problems">Problems</a>
+        <a href="#/settings" data-route="settings">Settings</a>
+      </nav>
+      <div class="toasts" id="toasts" aria-live="polite"></div>
+      <div class="drawer-backdrop" id="drawerBackdrop" hidden></div>
+      <aside class="drawer" id="drawer" hidden aria-label="Details"></aside>
     </div>
-
-    <script src="/static/app.js" defer></script>
+    <script src="/static/app.js?v=1.0.0" defer></script>
   </body>
 </html>

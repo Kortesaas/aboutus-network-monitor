@@ -2,7 +2,7 @@
 
 Read-only local production-network dashboard for the ABOUTUS show network.
 
-## Current v0.8 scope
+## Current v1.0 scope
 
 - FastAPI backend with a static browser dashboard.
 - Editable network configuration in `config/network.yaml`.
@@ -37,11 +37,16 @@ aboutus-monitor    One-file setup, run, service, logs, and health helper
 app/
   checks.py          Probe helpers for ping, TCP, and HTTP checks
   config.py          YAML config loader
-  discovery.py       Safe nmap ping-sweep discovery collector
+  devices.py         Device identity, location, and state correlation
+  discovery.py       Safe fping/nmap ping-sweep discovery collector
   main.py            FastAPI app and routes
+  monitor.py         Shared scheduler, scan lock, cache, and event bus
+  problems.py        Problem detection and acknowledgement state
+  settings.py        Editable settings API helpers
   snmp.py            Optional read-only SNMP collector
   storage.py         SQLite persistence for snapshots, device state, and events
-  status_service.py  Builds the dashboard status payload
+  switches.py        Switch faceplate and port-detail view builder
+  topology.py        Topology graph builder
   static/            Browser UI assets
 config/
   network.yaml       Editable network and inventory config
@@ -150,16 +155,21 @@ To remove the boot service:
 
 ## API
 
-- `GET /api/status` returns the complete dashboard snapshot.
+- `GET /api/state` returns the current complete shared dashboard snapshot.
+- `GET /api/events` opens the Server-Sent Events stream for live shared state updates.
+- `GET /api/status` returns the complete dashboard snapshot for compatibility.
 - `GET /api/devices` returns all known/discovered devices and VLAN groups.
 - `GET /api/topology` returns the visual topology payload.
 - `GET /api/switches` returns switch faceplate and port detail data.
 - `GET /api/history` returns recent device events and persisted snapshot totals.
+- `GET /api/scan/status` returns whether the monitor is idle, polling, scanning discovery, or reporting the last error.
+- `POST /api/scan/request?mode=fast` requests a lightweight shared poll for known infrastructure, devices, and SNMP switch data.
+- `POST /api/scan/request?mode=full` requests a full shared read-only refresh including subnet discovery.
 - `GET /api/docs` shows the FastAPI-generated OpenAPI docs.
 
 ## UI
 
-The v0.8 frontend is a lightweight static app with no external CDN dependencies. It keeps all data from the backend available, but uses progressive disclosure:
+The v1.0 frontend is a lightweight static app with no external CDN dependencies. It keeps all data from the backend available, but uses progressive disclosure:
 
 - Overview shows show-ready state, critical cards, problem devices, recent events, DNS checks, compact network path, and compact VLAN cards.
 - Devices provides search, filters, grouped VLAN sections, and expandable device details with identity, network, location, services, history, and notes.
@@ -171,11 +181,13 @@ The UI uses fixed grid tracks, wrapping controls, and compact action buttons so 
 
 The browser also stores the active page, device filters, collapsed VLAN groups, and expanded device details in `localStorage`, so automatic refreshes do not reset the working view.
 
-The browser refresh button and automatic dashboard refresh call `/api/status?refresh=true`, which bypasses the backend cache and runs a fresh read-only discovery pass. This keeps Recent Events useful for device join/leave changes.
+The backend owns the monitoring scheduler, shared cache, scan lock, and refresh cooldown. The browser loads `/api/state` once, then subscribes to `/api/events` for live `state_snapshot`, `scan_status`, device, switch, topology, error, and heartbeat events. If SSE is unavailable, the UI falls back to passive state polling only; browsers do not start independent monitoring cycles.
+
+The browser refresh button calls `/api/scan/request?mode=fast`. Any accepted refresh updates the one shared backend scan state, so every open PC, tablet, or phone sees the same scan phase, cooldown, errors, and refreshed data.
 
 ## History Database
 
-v0.8 writes a local SQLite database to `data/monitor.sqlite3`. It stores:
+v1.0 writes a local SQLite database to `data/monitor.sqlite3`. It stores:
 
 - recent dashboard snapshot totals;
 - per-device first seen, last seen, last checked, previous status, last status change, and offline-since fields;
@@ -244,13 +256,13 @@ The helper also reads `/home/aboutus/aboutus-network-monitor/.env` when it exist
 
 ## Optional SNMP
 
-v0.8 can enrich infrastructure and device information with read-only SNMP. It uses local system tools only:
+v1.0 can enrich infrastructure and device information with read-only SNMP. It uses local system tools only:
 
 ```bash
 sudo apt install snmp
 ```
 
-SNMP is enabled in `config/network.yaml`, but devices only return data when they allow read-only SNMP from the Pi and the local `.env` contains the correct community. Do not commit real SNMP communities to git.
+SNMP is enabled in `config/network.yaml`, but devices only return data when they allow read-only SNMP from the Pi and the local `.env` contains the correct community. Keep real communities in `.env` and reference them with `community_env` in `config/network.yaml`; do not commit real SNMP communities to git.
 
 Useful environment variables for `.env`:
 
@@ -259,6 +271,8 @@ ABOUTUS_SNMP_COMMUNITY=your-readonly-community
 ABOUTUS_SNMP_VERSION=2c
 ABOUTUS_SNMP_TIMEOUT_SECONDS=2
 ABOUTUS_SNMP_RETRIES=0
+ABOUTUS_SNMP_COMMUNITY_DELL=your-dell-readonly-community
+ABOUTUS_SNMP_COMMUNITY_EAP650=your-eap650-readonly-community
 ```
 
 After changing `.env`, restart the service:
@@ -267,31 +281,45 @@ After changing `.env`, restart the service:
 ./aboutus-monitor restart
 ```
 
-The collector reads common system, interface, counter, error, bridge/FDB, Q-BRIDGE, and optional PoE OIDs. It does not write SNMP values and does not change switch or router configuration.
+The collector reads common system, interface, counter, error, bridge/FDB, Q-BRIDGE, and optional PoE OIDs. It never performs SNMP SET/write operations and does not change switch, router, or access point configuration.
 
-MAC forwarding tables are not always exact device locations because switches also learn MACs on uplinks. For that reason, SNMP MAC observations are only promoted to a connected switch/port when the config marks the matching switch port as a trusted edge port:
+The TP-Link Omada EAP650 access points are configured as first-class `access_points`, not switches:
 
-```yaml
-snmp:
-  enabled: true
-  trusted_edge_ports:
-    stage-switch:
-      - "1"
-      - "2"
-  uplink_ports:
-    stage-switch:
-      - "16"
+- `ABOUTUS-AP-FOH` at `192.168.99.30`, location `FOH`, management VLAN `99`.
+- `ABOUTUS-AP-STAGE-A` at `192.168.99.31`, location `STAGE A`, management VLAN `99`.
+
+Both EAP650s use `ABOUTUS_SNMP_COMMUNITY_EAP650` from `.env` for read-only SNMP v2c. Their expected AP trunks use VLAN `99` untagged/native for AP management and VLANs `10`, `20`, `30`, `40` tagged for Wi-Fi clients. The dashboard shows an AP uplink as `unconfirmed` until LLDP or MAC-learning evidence proves the exact port.
+
+Manual AP SNMP smoke tests. Quote the community expansion so a `#` inside the value remains part of the SNMP community:
+
+```bash
+set -a
+. ./.env
+set +a
+snmpwalk -v2c -c "$ABOUTUS_SNMP_COMMUNITY_EAP650" 192.168.99.30 1.3.6.1.2.1.1
+snmpwalk -v2c -c "$ABOUTUS_SNMP_COMMUNITY_EAP650" 192.168.99.31 1.3.6.1.2.1.1
 ```
 
-Without trusted edge-port config, the dashboard still shows SNMP uptime and port/counter data, but device switch/port remains `Unknown`.
+MAC forwarding tables are not always exact device locations because switches also learn MACs on uplinks. For that reason, SNMP MAC observations are only promoted to a connected switch/port when the configured port profile and topology indicate the MAC is on an edge/access path.
 
-The FOH Allied Telesis AT-GS950/48 uses Q-BRIDGE-MIB for VLAN-aware MAC learning:
+```yaml
+switches:
+  - id: dell-foh
+    snmp: {version: 2c, community_env: ABOUTUS_SNMP_COMMUNITY_DELL}
+    ports:
+      "21": {profile: MGMT, label: PI}
+      "23": {profile: TRUNK, label: ROUTER, neighbor: lancom-router}
+```
+
+Without enough port/topology evidence, the dashboard still shows SNMP uptime and port/counter data, but device switch/port remains `Unknown`.
+
+The switches use Q-BRIDGE-MIB where available for VLAN-aware MAC learning:
 
 ```text
 1.3.6.1.2.1.17.7.1.2.2.1.2
 ```
 
-The index is interpreted as `VLAN ID + MAC bytes`. Trunk/downstream ports such as FOH port `47` and `41` are shown as learned-through ports, not direct device locations.
+The index is interpreted as `VLAN ID + MAC bytes`. Trunk/downstream ports such as Dell FOH ports `23`, `27`, and `28`, or Allied port `48`, are shown as learned-through paths, not direct device locations.
 
 The Switches tab also decodes Q-BRIDGE VLAN metadata:
 
@@ -318,30 +346,33 @@ Switch faceplates are configured under `switches` in `config/network.yaml`. Each
 
 The current layout includes:
 
-- FOH port `47`: LANCOM router trunk.
-- FOH port `41`: stage/downstream trunk.
-- FOH port `48`: ABOUTUS Monitor Pi MGMT access.
-- Stage port `15`: FOH uplink, manual fallback.
-- Stage port `16`: MGMT access, manual fallback.
+- Dell FOH port `21`: ABOUTUS Monitor Pi MGMT access.
+- Dell FOH port `22`: `ABOUTUS-AP-FOH` AP trunk (native VLAN 99, tagged 10/20/30/40).
+- Dell FOH port `23`: LANCOM router trunk.
+- Dell FOH ports `27` and `28`: stage/downstream trunks.
+- Dell Stage A port `22`: `ABOUTUS-AP-STAGE-A` AP trunk (native VLAN 99, tagged 10/20/30/40).
+- Dell Stage A port `28`: uplink to FOH.
+- Allied AT-GS950/48 port `48`: optional auxiliary native-99 trunk.
+- TP-Link T1600G port `23`: expansion uplink to FOH.
 
 ## VLAN Colors
 
-The UI color coding is configurable in `config/network.yaml` under `ui.vlan_colors` and `ui.port_role_colors`. These colors are used by VLAN cards, topology VLAN nodes, device VLAN groups, and switch port faceplates.
+The UI color coding is driven by VLAN `color` keys and `port_profiles` in `config/network.yaml`. These colors are used by VLAN cards, topology VLAN nodes, device VLAN groups, and switch port faceplates.
 
 Current VLAN palette:
 
 - VLAN `10` CONTROL: blue
 - VLAN `20` AUDIO: green
-- VLAN `30` LASER: red
-- VLAN `40` LIGHTING: purple
-- VLAN `50` VIDEO: orange
+- VLAN `30` LIGHT: red
+- VLAN `40` VIDEO: purple
+- VLAN `90` WAN_PASS: orange
 - VLAN `99` MGMT: light/white
 
-Stage and router trunk colors are configured separately under `ui.port_role_colors`.
+Trunk and AP trunk colors come from the configured `TRUNK` and `AP_TRUNK` port profiles.
 
 ## Discovery
 
-v0.8 can run a read-only `nmap -sn` ping sweep across all configured VLAN subnets. The collector:
+v1.0 can run a read-only `fping` sweep across all configured VLAN subnets, with `nmap -sn` as a fallback. The collector:
 
 - uses no port scanning;
 - scans only subnets listed in `config/network.yaml`;
@@ -350,21 +381,20 @@ v0.8 can run a read-only `nmap -sn` ping sweep across all configured VLAN subnet
 - lets manual inventory names and expected-device metadata win;
 - keeps MAC, switch, and port fields as `Unknown` when not proven.
 
-If `nmap` is missing, fails, or a subnet is unreachable, the API still returns a dashboard payload with discovery warnings.
+If `fping`/`nmap` is missing, fails, or a subnet is unreachable, the API still returns a dashboard payload with discovery warnings.
 
 Devices must answer the current read-only host-discovery method to appear automatically. If a client joins a VLAN but blocks ping/host-discovery probes, it may not show up until router ARP/DHCP or SNMP correlation is added.
 
-Install nmap on Raspberry Pi OS if needed:
+Install discovery tools on Raspberry Pi OS if needed:
 
 ```bash
-sudo apt install nmap
+sudo apt install fping nmap
 ```
 
 ## Next milestones
 
-1. Add router ARP/DHCP lease correlation so clients that block ping can still be seen.
-2. Add vendor/OUI lookup from a local bundled OUI database for MAC addresses not identified by nmap.
-3. Add editable device notes and role/type overrides from the UI, persisted back to inventory.
-4. Add per-device availability percentages and a short status timeline.
-5. Add per-port historical counter deltas so busy/erroring switch ports stand out during a show.
-4. Add alert acknowledgement/mute controls for expected maintenance windows.
+1. Add DHCP lease correlation so clients that block ping can still be seen earlier.
+2. Add vendor/OUI lookup from a local bundled OUI database for MAC addresses not identified by SNMP or ARP.
+3. Add per-device availability percentages and a short status timeline.
+4. Add alert mute controls for expected maintenance windows.
+5. Add browser-based smoke tests for the static UI.
